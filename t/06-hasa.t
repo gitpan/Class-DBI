@@ -34,8 +34,10 @@ ok(
 	'create Director'
 );
 
+$btaste = Film->retrieve('Bad Taste');
+
 ok($pj = $btaste->Director, "Bad taste now hasa() director");
-ok($pj->isa('Director'), ' ... which isa->Director');
+isa_ok($pj => 'Director');
 is($pj->id, 'Peter Jackson', ' ... and is the correct director');
 
 # Oh no!  Its Peter Jacksons even twin, Skippy!  Born one minute after him.
@@ -49,16 +51,7 @@ my $sj = Director->create(
 
 is($sj->id, 'Skippy Jackson', 'We have a new director');
 
-{
-	eval { $btaste->Director($btaste) };
-	like $@, qr/is not an object of type 'Director'/, "Need an object";
-}
-
 Film->hasa('Director' => 'CoDirector');
-{
-	eval { $btaste->CoDirector("Skippy Jackson") };
-	like $@, qr/is not an object of type 'Director'/, "Need an object";
-}
 
 $btaste->CoDirector($sj);
 $btaste->update;
@@ -124,4 +117,37 @@ sub fail_with_bad_object {
 	};
 	ok $@, $@;
 }
+
+package Foo;
+use base 'CDBase';
+__PACKAGE__->table('foo');
+__PACKAGE__->columns('All' => qw/ id fav /);
+# fav is a film
+__PACKAGE__->db_Main->do( qq{
+     CREATE TABLE foo (
+	     id        INTEGER,
+	     fav       VARCHAR(255)
+     )
+});
+
+
+package Bar;
+use base 'CDBase';
+__PACKAGE__->table('bar');
+__PACKAGE__->columns('All' => qw/ id fav /);
+# fav is a foo
+__PACKAGE__->db_Main->do( qq{
+     CREATE TABLE bar (
+	     id        INTEGER,
+	     fav       INTEGER
+     )
+});
+
+package main;
+Foo->has_a("fav" => "Film");
+Bar->has_a("fav" => "Foo");
+my $foo = Foo->create({ id => 6, fav => 'Bad Taste' });
+my $bar = Bar->create({ id => 2, fav => 6 });
+isa_ok($bar->fav, "Foo");
+isa_ok($foo->fav, "Film");
 

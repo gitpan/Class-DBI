@@ -123,7 +123,7 @@ sub new {
 
 sub _essential_string {
 	my $self  = shift;
-	my $table = $self->owner->_class_name;
+	my $table = $self->owner->table_alias;
 	join ", ", map "$table.$_", $self->essential;
 }
 
@@ -144,7 +144,7 @@ sub add_restriction {
 
 sub tables {
 	my $self = shift;
-	join ", ", map { join " ", $_->table, $_->_class_name } $self->kings;
+	join ", ", map { join " ", $_->table, $_->table_alias } $self->kings;
 }
 
 # my $sth = $query->run(@vals);
@@ -164,7 +164,7 @@ sub run {
 	my $sql_name = $self->sqlname or $owner->_croak("Query has no SQL");
 
 	my @sel_vals = @_
-		? ref $_[0] ? @{ $_[0] } : (@_)
+		? ref $_[0] eq "ARRAY" ? @{ $_[0] } : (@_)
 		: ();
 	my $sql_method = "sql_$sql_name";
 

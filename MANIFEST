@@ -20,6 +20,7 @@ t/12-filter.t
 t/13-constraint.t
 t/14-might_have.t
 t/15-accessor.t
+t/16-reserved.t
 t/17-data_type.t
 t/18-has_a.t
 t/19-set_sql.t
@@ -37,4 +38,6 @@ t/testlib/MyFilm.pm
 t/testlib/MyFoo.pm
 t/testlib/MyStar.pm
 t/testlib/MyStarLink.pm
+t/testlib/Order.pm
 t/testlib/OtherFilm.pm
+

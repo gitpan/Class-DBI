@@ -12,7 +12,7 @@ __PACKAGE__->set_db(
 	Main => "dbi:Pg:dbname=$db",
 	$user, $pass, { AutoCommit => 1 }
 );
-__PACKAGE__->table('bintest');
+__PACKAGE__->table(bintest => 'bintest');
 __PACKAGE__->columns(All   => qw(id bin));
 __PACKAGE__->data_type(bin => DBI::SQL_BINARY);
 

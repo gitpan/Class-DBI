@@ -15,7 +15,7 @@ INIT {
 }
 
 is(Blurb->primary_column, "title", "Primary key of Blurb = title");
-is_deeply [ Blurb->_essential ], [ Blurb->all_columns ], "Essential = All";
+is_deeply [ Blurb->_essential ], [ Blurb->primary_column ], "Essential = Primary";
 
 eval { Blurb->retrieve(10) };
 is $@, "", "No problem retrieving non-existent Blurb";

@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 39);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 43);
 }
 
 INIT {
@@ -138,5 +138,16 @@ is $@, '', "No errors";
 		ok $film->update, "Commit the film";
 		is $film->nonpersistent, 40, "And it's still there";
 	}
-
 }
+
+{    # was bug with TEMP and no Essential
+	is scalar Actor->columns('Essential'), scalar Actor->columns('Primary'), 
+		"Actor has no specific essential columns";
+	Actor->columns(TEMP => qw/nonpersistent/);
+	ok(Actor->has_column('nonpersistent'), "nonpersistent is a column");
+	ok(!Actor->has_real_column('nonpersistent'), " - but it's not real");
+	my @actors = eval { Actor->retrieve_all };
+	is $@, '', "no problems retrieving actors";
+}
+
+

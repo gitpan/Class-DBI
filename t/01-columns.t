@@ -54,7 +54,7 @@ is_deeply [ CD->columns('Primary') ] => [qw/artist/],
 	'CD primary:' . join ", ", CD->columns('Primary');
 is_deeply [ sort CD->columns('All') ] => [qw/artist length title/],
 	'CD all:' . join ", ", CD->columns('All');
-is_deeply [ sort CD->columns('Essential') ] => [qw/artist length title/],
+is_deeply [ sort CD->columns('Essential') ] => [qw/artist/],
 	'CD essential:' . join ", ", CD->columns('Essential');
 
 {

@@ -1,3 +1,25 @@
+0.92 Sat Apr 12 2003
+
+	New Functionality
+		- classes named after reserved SQL words can now supply a
+		  table_alias either directly, or as a second argument to table().
+
+	Deprecations
+		- hasa() now calls has_a() with a warning. It will disappear
+		  completely in a forthcoming release.
+		- issue warning on use of old hasa_list
+
+	Bug Fixes
+		- class data properly propagates (i.e. two classes can once again
+		  have has_a relationships of the same name) [Miyagawa + Marty]
+		- only deflate columns that are changing on update.
+
+	Other
+		- croak if update() does not change exactly one row [Tim Bunce].
+		  (Not yet live)
+		- The Essential column group now defaults to Primary rather than
+		  All. 
+
 0.91 Sat Mar  8 2003
 
 	New Functionality

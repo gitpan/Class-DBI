@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 29);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 33);
 }
 
 INIT {
@@ -71,6 +71,19 @@ my $sj = Director->create(
 	eval { $btaste->Director($btaste) };
 	like $@, qr/is not a Director/, "Can't set film as director";
 	is $btaste->Director->id, $pj->id, "PJ still the director";
+}
+
+{ # Still inflated after update
+	my $btaste = Film->retrieve('Bad Taste');
+	isa_ok $btaste->Director, "Director";
+	$btaste->numexplodingsheep(17);
+	$btaste->update;
+	isa_ok $btaste->Director, "Director"; 
+
+	$btaste->Director('Someone Else');
+	$btaste->update;
+	isa_ok $btaste->Director, "Director"; 
+	is $btaste->Director->id, "Someone Else", "Can change director";
 }
 
 is $sj->id, 'Skippy Jackson', 'Create new director - Skippy';

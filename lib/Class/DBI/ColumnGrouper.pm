@@ -145,7 +145,7 @@ sub primary {
 sub essential {
 	my $self = shift;
 	my @cols = $self->group_cols('Essential');
-	return @cols ? @cols : $self->all_columns;
+	return @cols ? @cols : $self->primary;
 }
 
 =head2 exists / in_database

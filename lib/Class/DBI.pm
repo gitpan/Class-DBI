@@ -12,7 +12,7 @@ use strict;
 use base "Class::DBI::__::Base";
 
 use vars qw($VERSION);
-$VERSION = '0.91';
+$VERSION = '0.92';
 
 use Class::DBI::ColumnGrouper;
 use Class::DBI::Query;
@@ -61,9 +61,9 @@ use overload
 # Our Class Data
 #----------------------------------------------------------------------
 __PACKAGE__->mk_classdata('__AutoCommit');
-__PACKAGE__->mk_classdata('__hasa_columns');
 __PACKAGE__->mk_classdata('__hasa_list');
 __PACKAGE__->mk_classdata('_table');
+__PACKAGE__->mk_classdata('_table_alias');
 __PACKAGE__->mk_classdata('sequence');
 __PACKAGE__->mk_classdata('__columns');
 __PACKAGE__->mk_classdata('__data_type');
@@ -157,10 +157,18 @@ sub _croak {
 }
 
 sub table {
-	my $proto = shift;
+	my ($proto, $table, $alias) = @_;
 	my $class = ref $proto || $proto;
-	$class->_table(shift ()) if @_;
-	return $class->_table || $class->_table($class->_class_name);
+	$class->_table($table)      if $table;
+	$class->table_alias($alias) if $alias;
+	return $class->_table || $class->_table($class->table_alias);
+}
+
+sub table_alias {
+	my ($proto, $alias) = @_;
+	my $class = ref $proto || $proto;
+	$class->_table_alias($alias) if $alias;
+	return $class->_table_alias || $class->_table_alias($class->_class_name);
 }
 
 sub _class_name {
@@ -281,7 +289,7 @@ sub _mk_column_accessors {
 sub _make_method {
 	my ($class, $name, $method) = @_;
 	return if defined &{"$class\::$name"};
-	warn "Column '$name' clashes with built-in method"
+	$class->_carp("Column '$name' in $class clashes with built-in method")
 		if defined &{"Class::DBI::$name"}
 		and not($name eq "id" and $class->primary_column eq "id");
 	no strict 'refs';
@@ -412,14 +420,14 @@ sub _auto_increment_value {
 sub _insert_row {
 	my $self = shift;
 	my $data = shift;
-	$self->_tidy_creation_data($data);
 	eval {
-		my $sth = $self->sql_MakeNewObj(
+		my @columns = keys %$data;
+		my $sth     = $self->sql_MakeNewObj(
 			$self->table,
-			join (', ', keys %$data),
-			join (', ', map $self->_column_placeholder($_), keys %$data),
+			join (', ', @columns),
+			join (', ', map $self->_column_placeholder($_), @columns),
 		);
-		$self->_bind_param($sth, [ keys %$data ]);
+		$self->_bind_param($sth, \@columns);
 		$sth->execute(values %$data);
 		my $primary_column = $self->primary_column;
 		$data->{$primary_column} = $self->_auto_increment_value
@@ -571,12 +579,20 @@ sub update {
 			$self->sql_update($self->table, $self->_update_line,
 			$self->primary_column);
 		$class->_bind_param($sth, [ $self->is_changed ]);
-		eval { $sth->execute($self->_update_vals, $self->id); };
+		my $rows = eval { $sth->execute($self->_update_vals, $self->id); };
 		if ($@) {
 			return $self->_croak(
 				"Can't update " . ref($self) . " " . $self->id . ": $@",
 				err => $@);
 		}
+
+		# enable this once new fixed DBD::SQLite is released:
+		if (0 and $rows != 1) {    # should always only update one row
+			my $msg_prefix = "Can't update $class (" . $self->id . ")";
+			$self->_croak("$msg_prefix: row not found") if $rows == 0;
+			$self->_croak("$msg_prefix: updated more than one row");
+		}
+
 		$self->call_trigger('after_update', discard_columns => \@changed_cols);
 
 		# delete columns that changed (in case adding to DB modifies them again)
@@ -600,7 +616,7 @@ sub _update_vals {
 sub DESTROY {
 	my ($self) = shift;
 	if (my @changed = $self->is_changed) {
-		my ($class, $id) = (ref $self, $self->{$self->primary_column});
+		my ($class, $id) = (ref $self, $self->{ $self->primary_column });
 		$self->_carp("$class $id destroyed without saving changes to "
 				. join (', ', @changed));
 	}
@@ -638,8 +654,9 @@ sub _flesh {
 	my @real_groups = grep $_ ne "TEMP", @groups;
 	my @want = grep !exists $self->{$_}, $self->_groups2cols(@real_groups);
 	if (@want) {
-		my $id = $self->{$self->primary_column};
-		$self->_croak("Can't flesh an object with no primary key") unless defined $id;
+		my $id = $self->{ $self->primary_column };
+		$self->_croak("Can't flesh an object with no primary key")
+			unless defined $id;
 		my $sth = $self->_run_query('Flesh', $self->primary_column, $id, \@want);
 		my $row = $sth->fetchrow_arrayref
 			or $self->_croak("Can't fetch extra columns for " . $self->id);
@@ -665,7 +682,7 @@ sub set {
 
 		# We increment instead of setting to 1 because it might be useful to
 		# someone to know how many times a value has changed between updates.
-		$self->{__Changed}{$column}++ if $self->has_real_column($column); 
+		$self->{__Changed}{$column}++ if $self->has_real_column($column);
 		eval { $self->call_trigger("after_set_$column") };    # eg inflate
 		if ($@) {
 			delete $self->{$column};
@@ -677,7 +694,7 @@ sub set {
 	return 1;
 }
 
-sub is_changed { keys %{shift->{__Changed}} }
+sub is_changed { keys %{ shift->{__Changed} } }
 
 # By default do nothing. Subclasses should override if required.
 #
@@ -788,7 +805,7 @@ sub has_a {
 	$class->_extend_class_data(__hasa_rels => $column => [ $a_class, %meths ]);
 	$class->add_trigger(select              => _inflate_to_object($column));
 	$class->add_trigger("after_set_$column" => _inflate_to_object($column));
-	$class->add_trigger(before_create       => _deflate_object($column));
+	$class->add_trigger(before_create       => _deflate_object($column, 1));
 	$class->add_trigger(before_update       => _deflate_object($column));
 }
 
@@ -823,11 +840,12 @@ sub _simple_bless {
 }
 
 sub _deflate_object {
-	my $col = shift;
+	my ($col, $always) = @_;
 	return sub {
 		my $self = shift;
-		$self->{$col} = $self->_deflated_column($col);
-		}
+		$self->{$col} = $self->_deflated_column($col)
+			if ($always or $self->{__Changed}->{$col});
+	};
 }
 
 sub _deflated_column {
@@ -839,9 +857,9 @@ sub _deflated_column {
 	my $deflate = $meths{'deflate'} || '';
 	return $self->_croak("Can't deflate $col: $val is not a $a_class")
 		unless UNIVERSAL::isa($val, $a_class);
-	return UNIVERSAL::isa($val, 'Class::DBI') ? $val->id
-		: $deflate ? $val->$deflate()
-		: "$val";
+	return $val->$deflate() if $deflate;
+	return $val->id if UNIVERSAL::isa($val => 'Class::DBI');
+	return "$val";
 }
 
 #----------------------------------------------------------------------
@@ -1019,6 +1037,7 @@ sub _single_value_select {
 		$sth = $class->sql_single($select, $class->table);
 		$sth->execute;
 		my @row = $sth->fetchrow_array;
+		$sth->finish;
 		$row[0];
 	};
 	if ($@) {
@@ -1085,87 +1104,13 @@ sub _invalid_object_method {
 
 sub hasa {
 	my ($class, $f_class, $f_col) = @_;
-	$class->_carp("hasa() is deprecated in favour of has_a()");
-	_require_class($f_class);
-
-	# Store the relationship
-	my $hasa_columns = $class->__hasa_columns || {};
-	$hasa_columns->{$f_col} = $f_class;
-	$class->__hasa_columns($hasa_columns);
-
-	my $obj_key = "__${f_class}_${f_col}_Obj";
-	$class->columns($obj_key, $f_col);
-
-	my $method = {
-		ro => $class->accessor_name($f_col),
-		wo => $class->mutator_name($f_col),
-	};
-
-	{
-		my $for_acc = "_" . $method->{ro} . "_accessor";
-		my $for_mut = "_" . $method->{wo} . "_accessor";
-		my $mutator = sub {
-			my $self = shift;
-			my $obj  = shift;
-			return $self->_croak("'$obj' is not an object of type '$f_class'")
-				unless ref $obj eq $f_class;
-			$self->{$obj_key} = $obj;
-			$self->$for_mut($obj->id);
-		};
-
-		my $accessor = sub {
-			my $self = shift;
-			return $self->_croak("Can't set via $method->{ro}") if @_;
-			if (not defined $self->{$obj_key}) {
-				my $obj_id = $self->$for_acc() or return;
-				$self->{$obj_key} = $f_class->retrieve($obj_id)
-					or return $self->_croak("Can't retrieve $f_class ($obj_id)");
-			}
-			return $self->{$obj_key};
-		};
-
-		my $common = sub {
-			my $self = shift;
-			$mutator->($self, @_) if @_;
-			return $accessor->($self);
-		};
-
-		{
-			local $SIG{__WARN__} = sub { };
-			no strict 'refs';
-
-			if ($for_acc eq $for_mut) {
-				*{"$class\::$method->{ro}"} = $common;
-			} else {
-				*{"$class\::$method->{ro}"} = $accessor;
-				*{"$class\::$method->{wo}"} = $mutator;
-			}
-		}
-	}
-	return 1;
+	$class->_carp("hasa() is deprecated in favour of has_a(). Using it instead.");
+	$class->has_a($f_col => $f_class);
 }
-
-sub _tidy_creation_data {
-	my ($class, $data) = @_;
-	my $hasa_cols = $class->__hasa_columns || {};
-	$class->normalize_hash($hasa_cols);
-	foreach my $col (keys %$hasa_cols) {
-		next unless exists $data->{$col} and ref $data->{$col};
-		my $want_class = $hasa_cols->{$col};
-		my $obj        = $data->{$col};
-		return $class->_croak("$class $col value $obj is not a $want_class")
-			unless $obj->isa($want_class);
-		$data->{$col} = $obj->id;
-	}
-	return $data;
-}
-
-#----------------------------------------------------------------------
-# has many stuff
-#----------------------------------------------------------------------
 
 sub hasa_list {
 	my $class = shift;
+	$class->_carp("hasa_list() is deprecated in favour of has_many()");
 	$class->has_many(@_[ 2, 0, 1 ], { nohasa => 1 });
 }
 
@@ -1187,7 +1132,7 @@ sub has_many {
 		$f_key = "";
 	}
 
-	$f_key ||= $class->_class_name;
+	$f_key ||= $class->table_alias;
 
 	if (ref $f_key eq "ARRAY") {
 		return $class->_croak("Multiple foreign keys not implemented")
@@ -1204,7 +1149,7 @@ sub has_many {
 
 		$query->kings($class, $f_class);
 		$query->add_restriction(sprintf "%s.%s = %s.%s",
-			$f_class->_class_name, $f_key, $class->_class_name,
+			$f_class->table_alias, $f_key, $class->table_alias,
 			$class->primary_column);
 
 		my $run_search = sub {
@@ -1283,9 +1228,9 @@ sub might_have {
 
 sub _extend_class_data {
 	my ($class, $struct, $key, $value) = @_;
-	my $hashref = $class->$struct() || {};
-	$hashref->{$key} = $value;
-	$class->$struct($hashref);
+	my %hash = %{ $class->$struct() || {} };
+	$hash{$key} = $value;
+	$class->$struct(\%hash);
 }
 
 sub _require_class {
@@ -1429,7 +1374,7 @@ Class::DBI needs to know how to access the database.  It does this
 through a DBI connection which you set up by calling the set_db()
 method.
 
-	Music::DBI->set_db('Main', 'dbi:mysql', 'user', 'password');
+	Music::DBI->set_db('Main', 'dbi:mysql:', 'user', 'password');
 
 By calling the method in your application base class all the
 table classes that inherit from it will share the same connection.
@@ -1520,6 +1465,24 @@ class is stored.  It -must- be set.
 
 Table information is inherited by subclasses, but can be overridden.
 
+=head2 table_alias
+
+	package Shop::Order;
+	__PACKAGE__->table('orders');
+	__PACKAGE__->table_alias('orders');
+
+When Class::DBI constructs SQL, it aliases your table name to a name
+representing your class. However, if your class's name is an SQL reserved
+word (such as 'Order') this will cause SQL errors. In such cases you
+should supply your own alias for your table name (which can, of course,
+be the same as the actual table name).
+
+This can also be passed as a second argument to 'table':
+
+	__PACKAGE-->table('orders', 'orders');
+
+As with table, this is inherited but can be overriden.
+
 =head2 sequence
 
 	__PACKAGE__->sequence($sequence_name);
@@ -1527,14 +1490,16 @@ Table information is inherited by subclasses, but can be overridden.
 	$sequence_name = Class->sequence;
 	$sequence_name = $obj->sequence;
 
-If you are using a database which supports sequences, then you should
-declare this using the sequence() method.
+If you are using a database which supports sequences and you want
+to use a sequence to automatically supply values for the primary
+key of a table, then you should declare this using the sequence()
+method:
 
 	__PACKAGE__->columns(Primary => 'id');
 	__PACKAGE__->sequence('class_id_seq');
 
-Class::DBI will use the sequence to generate primary keys when objects
-are created yet the primary key is not specified.
+Class::DBI will use the sequence to generate a primary key value
+when objects are created without one.
 
 If you are using a database with AUTO_INCREMENT (e.g. MySQL) then
 you do not need this, and a create() which does not specify a primary
@@ -1563,18 +1528,19 @@ objects and the values are the initial settings of those fields.
 		year   => 1980,
 	});
 
-If the primary column is not in %data, create() will assume it is to be
-generated.  If a sequence() has been specified for this Class, it will
-use that.  Otherwise, it will assume the primary key can be generated
-by AUTO_INCREMENT and attempt to use that.
+If the table has a single primary key column and that column value
+is not defined in %data, create() will assume it is to be generated.
+If a sequence() has been specified for this Class, it will use that.
+Otherwise, it will assume the primary key can be generated by
+AUTO_INCREMENT and attempt to use that.
+
+The C<before_create>($self) trigger is invoked directly after storing
+the supplied values into the new object and before inserting the record
+into the database.
 
 If the class has declared relationships with foreign classes via
 has_a(), you can pass an object to create() for the value of that key.
 Class::DBI will Do The Right Thing.
-
-The C<before_create>($self) trigger is invoked directly after storing
-the database values into the new object and before inserting the record
-into the database.
 
 After the new record has been inserted into the database the data
 for non-primary key columns is discarded from the object. If those
@@ -1596,7 +1562,6 @@ which columns are discarded.  For example:
 	});
 
 Take care to not discard a primary key column unless you know what you're doing.
-
 
 =head2 find_or_create
 
@@ -1623,7 +1588,6 @@ to be deleted. It is invoked before any cascaded deletes.
 The C<after_delete> trigger is invoked after the record has been
 deleted from the database and just before the contents in memory
 are discarded.
-
 
 =head1 RETRIEVING OBJECTS
 
@@ -2026,7 +1990,8 @@ And of autoupdating:
 
 Manual updating is probably more efficient than autoupdating and
 it provides the extra safety of a discard_changes() option to clear out all
-unsaved changes.  Autoupdating is more convient for the programmer.
+unsaved changes.  Autoupdating can be more convient for the programmer.
+Autoupdating is I<off> by default.
 
 If changes are left un-updated or not rolledback when the object is
 destroyed (falls out of scope or the program ends) then Class::DBI's
@@ -2041,12 +2006,14 @@ DESTROY method will print a warning about unsaved changes.
 	$update_style = $obj->autoupdate;
 
 This is an accessor to the current style of auto-updating.  When called
-with no arguments it returns the current auto-updating state, true for
-on, false for off.  When given an argument it turns auto-updating on
-and off.  A true value turns it on, a false one off.  When called as a
-class method it will control the -pdating style for every instance of
-the class.  When called on an individual object it will control updating
-for just that object, overriding the choice for the class.
+with no arguments it returns the current auto-updating state, true for on,
+false for off.  When given an argument it turns auto-updating on and off:
+a true value turns it on, a false one off.
+
+When called as a class method it will control the updating style for
+every instance of the class.  When called on an individual object it
+will control updating for just that object, overriding the choice for
+the class.
 
 	__PACKAGE__->autoupdate(1);     # Autoupdate is now on for the class.
 
@@ -2054,8 +2021,6 @@ for just that object, overriding the choice for the class.
 	$obj->autoupdate(0);      # Shut off autoupdating for this object.
 
 The update setting for an object is not stored in the database.
-
-Autoupdating is off by default.
 
 =head2 update
 
@@ -2080,9 +2045,14 @@ When update() is called the C<before_update>($self) trigger is
 always invoked immediately.
 
 If any columns have been updated then the C<after_update> trigger
-is invoked after the database update has executed and is passed
-($self, discard_columns => \@discard_columns).  The trigger code can
-modify the discard_columns array to affect which columns are discarded.
+is invoked after the database update has executed and is passed:
+  ($self, discard_columns => \@discard_columns, rows => $rows)
+
+(where rows is the return value from the DBI execute() method).
+
+The trigger code can modify the discard_columns array to affect
+which columns are discarded.
+
 For example:
 
 	Class->add_trigger(after_update => sub {
@@ -2094,7 +2064,14 @@ For example:
 		push @$discard_columns, 'md5_hash' if grep { /^foo/ } @$discard_columns;
 	});
 
-Take care to not delete a primary key column unless you know what you're doing.
+Take care to not delete a primary key column unless you know what
+you're doing.
+
+The update() method returns the number of rows updated, which should
+always be 1, or else -1 if no update was needed. If the record in the
+database has been deleted, or its primary key value changed, then the
+update will not affect any records and so the update() method will
+return 0.
 
 =head2 discard_changes
 
@@ -2423,17 +2400,17 @@ that group for you, for more efficient access.
 So for example, if we usually fetch the artist and title, but don't use
 the 'year' so much, then we could say the following:
 
-	CD->columns(Primary   => 'cdid');
+	CD->columns(Primary   => qw/cdid/);
 	CD->columns(Essential => qw/artist title/);
 	CD->columns(Others    => qw/year runlength/);
 
-Now when you fetch back a CD it will come pre-loaded with the 'artist'
-and 'title' fields. Fetching the 'year' will mean another visit to
-the database, but will bring back the 'runlength' whilst it's there.
+Now when you fetch back a CD it will come pre-loaded with the 'cdid',
+'artist' and 'title' fields. Fetching the 'year' will mean another visit
+to the database, but will bring back the 'runlength' whilst it's there.
 This can potentially increase performance.
 
-If you don't like this behavior, then just add all your columns to the
-'All' group, and Class::DBI will load everything at once.
+If you don't like this behavior, then just add all your non-primary key
+columns to the one group, and Class::DBI will load everything at once.
 
 =head2 Non-Persistent Fields
 
@@ -2451,15 +2428,18 @@ you can declare them as part of a column group of 'TEMP'.
 	my $primary      = $class->primary_column;
 	my @essential    = $class->_essential;
 
-There are three 'reserved' groups.  'All', 'Essential' and 'Primary'.
+There are four 'reserved' groups.  'All', 'Essential', 'Primary' and
+'TEMP'.
 
 B<'All'> are all columns used by the class.  If not set it will be
 created from all the other groups.
 
 B<'Primary'> is the single primary key column for this class.  It I<must>
 be set before objects can be used.  (Multiple primary keys are not
-supported).  If 'All' is given but not 'Primary' it will assume
-the first column in 'All' is the primary key.
+supported).  
+
+If 'All' is given but not 'Primary' it will assume the first column in
+'All' is the primary key.
 
 B<'Essential'> are the minimal set of columns needed to load and use
 the object.  Only the columns in this group will be loaded when an object
@@ -2598,16 +2578,19 @@ me your suggestions.
 
 Theoretically this should work with almost any standard RDBMS. Of course,
 in the real world, we know that that's not true. We know that this works
-with MySQL, PostgrSQL and SQLite, each of which have their own additional
+with MySQL, PostgrSQL, Oracle and SQLite, each of which have their own additional
 subclass on CPAN that you may with to explore if you're using any of these.
 
-	L<Class::DBI::mysql>, L<Class::DBI::Pg>, L<Class::DBI::SQLite>
+	L<Class::DBI::mysql>, L<Class::DBI::Pg>, L<Class::DBI::Oracle>,
+	L<Class::DBI::SQLite>
 
-For the most part it's been reported to work with Oracle and
-Sybase. Beyond that lies The Great Unknown(tm). If you have access to
-other databases, please give this a test run, and let me know the results.
+For the most part it's been reported to work with Sybase. Beyond that
+lies The Great Unknown(tm). If you have access to other databases,
+please give this a test run, and let me know the results.
 
-This is known not to work with DBD::RAM
+This is known not to work with DBD::RAM. As a minimum it requires a
+database that supports table aliasing, and a DBI driver that supports
+placeholders.
 
 =head1 CURRENT AUTHOR
 
@@ -2620,7 +2603,7 @@ Michael G Schwern <schwern@pobox.com>
 =head1 THANKS TO
 
 Tim Bunce, Tatsuhiko Miyagawa, Damian Conway, Uri Gutman, Mike Lambert
-and the POOP group....
+and the POOP group.
 
 =head1 SUPPORT
 
@@ -2648,11 +2631,14 @@ of different approaches to database persistence, such as Class::DBI,
 Alazabo, Tangram, SPOPS etc.
 
 CPAN contains a variety of other modules that can be used with Class::DBI:
-L<Class::DBI::Join>, L<Class::DBI::FromCGI>, L<Class::DBI::AbstractSearch>
-etc.
+L<Class::DBI::Join>, L<Class::DBI::FromCGI>, L<Class::DBI::AbstractSearch>,
+L<Class::DBI::View>, L<Class::DBI::Loader> etc.
+
+L<Class::DBI::SAK>, the Swiss Army Knife for Class::DBI attempts to
+bring many of these together into one interface.
 
 For a full list see:
-	http://search.cpan.org/search?query=Class%3A%3ADBI
+	http://search.cpan.org/search?query=Class%3A%3ADBI&mode=module
 
 Class::DBI is built on top of L<Ima::DBI>, L<Class::Accessor> and
 L<Class::Data::Inheritable>.
