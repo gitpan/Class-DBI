@@ -1,3 +1,7 @@
+0.27  Mon Apr 23 09:04:51 BST 2001
+    * Class::DBI->new() deprecated in favor of create()
+    - Fixed the 'Primary before All' bug reported by Tony Bowden
+
 0.26  Mon Apr  9 14:32:17 BST 2001
     - Class->columns('All', @cols) now assumes the first column to be
       your primary.

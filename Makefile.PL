@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.9 2000/09/10 05:07:25 schwern Exp $
+# $Id: Makefile.PL,v 1.10 2001/04/09 13:43:17 schwern Exp $
 #
 # A template for Makefile.PL used by Arena Networks.
 # - Set the $PACKAGE variable to the name of your module.

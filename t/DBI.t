@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.16 2000/10/05 23:07:08 schwern Exp $
+# $Id: DBI.t,v 1.18 2001/04/23 09:08:43 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -147,11 +147,11 @@ package main;
 ::ok( !Film->is_column('HGLAGAGlAG'),   'is_column(), false');
 
 # Create a new film entry for Bad Taste.
-my $btaste = Film->new({ Title       => 'Bad Taste',
-                         Director    => 'Peter Jackson',
-                         Rating      => 'R',
-                         NumExplodingSheep   => 1
-                       });
+my $btaste = Film->create({ Title       => 'Bad Taste',
+                            Director    => 'Peter Jackson',
+                            Rating      => 'R',
+                            NumExplodingSheep   => 1
+                          });
 ::ok( defined $btaste and ref $btaste   eq 'Film',      'new()'     );
 ::ok( $btaste->Title            eq 'Bad Taste',     'Title() get'   );
 ::ok( $btaste->Director         eq 'Peter Jackson', 'Director() get'    );
@@ -159,11 +159,11 @@ my $btaste = Film->new({ Title       => 'Bad Taste',
 ::ok( $btaste->NumExplodingSheep == 1,              'NumExplodingSheep() get'   );
 
 
-Film->new({ Title       => 'Gone With The Wind',
-        Director        => 'Bob Baggadonuts',
-        Rating      => 'PG',
-        NumExplodingSheep   => 0
-      });
+Film->create({ Title       => 'Gone With The Wind',
+               Director        => 'Bob Baggadonuts',
+               Rating      => 'PG',
+               NumExplodingSheep   => 0
+             });
 
 # Retrieve the 'Gone With The Wind' entry from the database.
 my $gone = Film->retrieve('Gone With The Wind');
@@ -183,11 +183,11 @@ my $gone_copy = Film->retrieve('Gone With The Wind');
 ::ok( $gone->Rating eq 'NC-17',                                 'commit() again'    );
 
 # Grab the 'Bladerunner' entry.
-Film->new({ Title       => 'Bladerunner',
-            Director    => 'Bob Ridley Scott',
-            Rating      => 'R',
-            NumExplodingSheep => 0,  # Exploding electric sheep?
-          });
+Film->create({ Title       => 'Bladerunner',
+               Director    => 'Bob Ridley Scott',
+               Rating      => 'R',
+               NumExplodingSheep => 0,  # Exploding electric sheep?
+             });
 my $blrunner = Film->retrieve('Bladerunner');
 ::ok( defined $blrunner and ref $blrunner eq 'Film',    'retrieve() again'  );
 ::ok( $blrunner->Title      eq 'Bladerunner'        and
@@ -206,7 +206,7 @@ my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
 
 
 # Ishtar doesn't deserve an entry anymore.
-Film->new( { Title => 'Ishtar' } );
+Film->create( { Title => 'Ishtar' } );
 Film->retrieve('Ishtar')->delete;
 ::ok( !Film->retrieve('Ishtar'),                                'delete()'  );
 
@@ -345,10 +345,10 @@ Film::Directors->set_db('Main', @{dbi}{'data src', 'user', 'password'},
 Film::Directors->columns(All     => qw(Name Birthday IsInsane));
 Film::Directors->table('Directors');
 
-::ok( Film::Directors->new({ Name       => 'Peter Jackson',
-                             Birthday   => -300000000,
-                             IsInsane   => 1
-                           }) );
+::ok( Film::Directors->create({ Name       => 'Peter Jackson',
+                                Birthday   => -300000000,
+                                IsInsane   => 1
+                              }) );
 
 Film->hasa('Film::Directors' => 'Director');
 Film->hasa('Film::Directors' => 'CoDirector');
@@ -360,10 +360,10 @@ my $pj = $btaste->Director;
       $pj->id eq 'Peter Jackson', 'hasa()' );
 
 # Oh no!  Its Peter Jackson's even twin, Skippy!  Born one minute after him.
-my $sj = Film::Directors->new({ Name       => 'Skippy Jackson',
-                                Birthday   => (-300000000 + 60),
-                                IsInsane   => 1
-                              });
+my $sj = Film::Directors->create({ Name       => 'Skippy Jackson',
+                                   Birthday   => (-300000000 + 60),
+                                   IsInsane   => 1
+                                 });
 ::ok( defined $sj and $sj->id eq 'Skippy Jackson' );
 $btaste->CoDirector($sj);
 $btaste->commit;
@@ -384,12 +384,12 @@ $btaste = YA::Film->retrieve('Bad Taste');
 $sj = Film::Directors->retrieve('Skippy Jackson');
 $pj = Film::Directors->retrieve('Peter Jackson');
 
-my $tastes_bad = YA::Film->new({ Title          => 'Tastes Bad',
-                                 Director       => $sj,
-                                 CoDirector     => $pj,
-                                 Rating         => 'R',
-                                 NumExplodingSheep => 23
-                               });
+my $tastes_bad = YA::Film->create({ Title          => 'Tastes Bad',
+                                    Director       => $sj,
+                                    CoDirector     => $pj,
+                                    Rating         => 'R',
+                                    NumExplodingSheep => 23
+                                  });
 
 ::ok( $tastes_bad->_Director_accessor   eq 'Skippy Jackson', 
       'new() with objects' );

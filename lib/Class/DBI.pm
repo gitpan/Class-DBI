@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.27 2001/01/10 06:54:14 schwern Exp $
+# $Id: DBI.pm,v 1.29 2001/04/23 09:08:43 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.26';
+$VERSION = '0.27';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -78,11 +78,11 @@ sub _safe_exists {
   use Film;
 
   # Create a new film entry for Bad Taste.
-  $btaste = Film->new({ Title       => 'Bad Taste',
-                        Director    => 'Peter Jackson',
-                        Rating      => 'R',
-                        NumExplodingSheep   => 1
-                      });
+  $btaste = Film->create({ Title       => 'Bad Taste',
+                           Director    => 'Peter Jackson',
+                           Rating      => 'R',
+                           NumExplodingSheep   => 1
+                         });
 
   # Retrieve the 'Gone With The Wind' entry from the database.
   my $gone = Film->retrieve('Gone With The Wind');
@@ -232,9 +232,9 @@ might find it necessary to override them.
 
 =over 4
 
-=item B<new>
+=item B<create>
 
-    $obj = Class->new(\%data);
+    $obj = Class->create(\%data);
 
 This is a constructor to create a new object and store it in the
 database.  %data consists of the initial information to place in your
@@ -245,11 +245,11 @@ fields.
 $obj is an instance of Class built out of a hash reference.
 
   # Create a new film entry for Bad Taste.
-  $btaste = Film->new({ Title       => 'Bad Taste',
-                        Director    => 'Peter Jackson',
-                        Rating      => 'R',
-                        NumExplodingSheep   => 1
-                      });
+  $btaste = Film->create({ Title       => 'Bad Taste',
+                           Director    => 'Peter Jackson',
+                           Rating      => 'R',
+                           NumExplodingSheep   => 1
+                         });
 
 If the primary column is not in %data, new() will assume it is to be
 generated.  If a sequence() has been specified for this Class, it will
@@ -278,7 +278,7 @@ __PACKAGE__->set_sql('Nextval', <<'', 'Main');
 SELECT NEXTVAL ('%s')
 
 
-sub new {
+sub create {
     my($proto, $data) = @_;
     my($class) = ref $proto || $proto;
 
@@ -364,6 +364,36 @@ sub _init {
 }
 
 =pod
+
+=item B<new>
+
+  $obj = Class->new(\%data);
+
+This is a B<deprecated> synonym for create().  Class::DBI originally
+used new() to create new objects but it caused confusion as to whether
+new() would retrieve or create new objects.  Now you can choose what
+new() can do.
+
+To pick, simply subclass like so...
+
+  package My::Class::DBI;
+  use base qw(My::Class::DBI);
+
+  # Make new() synonymous with retrieve()
+  sub new {
+      my($proto) = shift;
+      $proto->retrieve(@_);
+  }
+
+If you wish to alter the way retrieve() works, be sure to put that
+code in retrieve() and not new() or else Class::DBI won't use it.
+
+=cut
+
+sub new {
+  my($proto) = shift;
+  $proto->create(@_);
+}
 
 =item B<retrieve>
 
@@ -481,7 +511,7 @@ sub copy {
         $data{$primary_col} = shift;
     }
 
-    return $self->new(\%data);
+    return $self->create(\%data);
 }
 
 
@@ -519,7 +549,7 @@ sub move {
         $data{$primary_col} = $new_id;
     }
 
-    return $class->new(\%data);
+    return $class->create(\%data);
 }
 
 
@@ -1191,7 +1221,7 @@ sub columns {
 
         $class->normalize(\@columns);
 
-        if( $group eq 'Essential' ) {
+        if( $group =~ /^Essential|All$/ and exists $class_columns->{Primary}) {
             my($prim_col) = $class->columns('Primary');
             unless( grep $_ eq $prim_col, @columns ) {
                 push @columns, $prim_col;
