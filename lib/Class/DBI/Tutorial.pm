@@ -277,28 +277,47 @@ Given an ID it will retrieve an object with that ID from the database.
 
   my $gone = Film->retrieve('Gone With The Wind');
 
+=head2 retrieve_all
+
+  @objs = Class->retrieve_all;
+
+Retrieves objects for all rows in the database. (This is probably a 
+bad idea if your table is big).  
+
+  my @all_films = Film->retrieve_all;
+
 =head2 copy
 
   $new_obj = $obj->copy;
   $new_obj = $obj->copy($new_id);
+  $new_obj = $obj->copy({ title => 'new_title', rating => 18 });
 
 This creates a copy of the given $obj both in memory and in the
 database.  The only difference is that the $new_obj will have a new
-primary identifier.  $new_id will be used if provided, otherwise the
-usual sequence or autoincremented primary key will be used.
+primary identifier.  
+
+A new value for the primary key can be suppiler, otherwise the
+usual sequence or autoincremented primary key will be used. If you
+wish to change values other than the primary key, then pass a hashref
+of all the new values.
 
     my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
+    my $blrunner_unrated = $blrunner->copy({
+      Title => "Bladerunner: Director's Cut",
+      Rating => 'Unrated',
+    });
 
 =head2 move
 
   my $new_obj = Sub::Class->move($old_obj);
   my $new_obj = Sub::Class->move($old_obj, $new_id);
+  my $new_obj = Sub::Class->move($old_obj, \%changes);
 
 For transfering objects from one class to another.  Similar to copy(), an
 instance of Sub::Class is created using the data in $old_obj (Sub::Class
-is a subclass of $old_obj's subclass).  Like copy(), $new_id is used as
-the primary key of $new_obj, otherwise the usual sequence or autoincrement
-is used.
+is a subclass of $old_obj's subclass).  Like copy(), you can supply
+$new_id as the primary key of $new_obj (otherwise the usual sequence or
+autoincrement is used), or a hashref of multiple new values.
 
 =head2 delete
 
@@ -538,19 +557,53 @@ with a subclass around it:
 Any film is going to have lots of actors.  You'd declare this relationship
 like so:
 
-    Film->hasa_list('Film::Actors', ['Film'], 'overpaid_gits');
+    Film->hasa_list('Film::Actors', ['Film'], 'actors');
 
 Declars that a Film has many Film::Actors associated with it.  These are
 stored in the Actors table (gotten from Film::Actors->table) with the
 column Film containing Film's primary key.  This is accessed via the
-method 'overpaid_gits()'.
+method 'actors()'.
 
-    my @actors = $film->overpaid_gits;
+    my @actors = $film->actors;
 
 This basically does a "'SELECT * FROM Actors WHERE Film = '.$film->id"
 turning them into objects and returning.
 
 The accessor is currently read-only.
+
+=head2 Many To Many Relationships
+
+This means that it is now possible to define many to many relationships
+using a combination of 'hasa' and 'hasa' list.
+
+Let's say we set up a table for producers (with name and height), and
+then another one for mapping each producer to each Film (with 'producer'
+and 'film' columns cross-referencing to the respective names).
+
+Thus we would create:
+
+  package Producer;
+  Producer->table('producer');
+  Producer->columns(All => qw/Name Height/);
+
+  package FilmProducer;
+  FilmProducer->table('producer_to_film_xref');
+  FilmProducer->columns(All => qw/Film Producer/);
+  FilmProducer->hasa('Producer', 'producer');
+
+and add the link to Film:
+
+  Film->hasa_list('FilmProducer', ['producer'], 'producers');
+
+Now calling $film->producers will retrieve a list of FilmProducer objects
+which in turn have a Producer object living in their 'producer()' method,
+enabling you to call:
+
+  foreach my $xref ($film->producers) {
+    printf "Produced by %s\n", $xref->producer->name;
+  }
+
+[At some stage I'd like to make this even easier]
 
 =head1 DEFINING SQL STATEMENTS
 

@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 31;
+use Test::More tests => 32;
 
 require './t/testlib/Film.pm';
 Film->CONSTRUCT;
@@ -32,6 +32,11 @@ is( $gone->Rating, 'PG', 'Rating() get again'    );
 $gone->Rating('NC-17');
 is( $gone->Rating, 'NC-17', 'Rating() set'          );
 $gone->commit;
+
+{
+  my @films = eval { Film->retrieve_all };
+  is (@films, 2, "We have 2 films in total");
+}
 
 my $gone_copy = Film->retrieve('Gone With The Wind');
 ok( $gone->NumExplodingSheep == 5,  'commit()'      );

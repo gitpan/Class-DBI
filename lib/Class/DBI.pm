@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.32';
+$VERSION = '0.33';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -112,6 +112,7 @@ sub _next_in_sequence {
 
 sub _insert_row {
   my $self = shift;
+  my $class = ref($self);
   my $data = shift;
   eval {
     # Enter a new row into the database containing our object's information.
@@ -130,7 +131,7 @@ sub _insert_row {
     }
   };
   if($@) {
-    $self->DBIwarn('New', 'MakeNewObj');
+    $self->DBIwarn('New $class', 'MakeNewObj');
     return;
   }
   return 1;
@@ -209,7 +210,7 @@ sub retrieve {
   my $class = shift;
   my $id = shift or return;
   croak "Cannot retrieve a reference" if ref($id);
-  my @rows = $class->_run_search('Search', $class->primary, $id);
+  my @rows = $class->search($class->primary => $id);
   return $rows[0];
 }
 
@@ -231,16 +232,22 @@ usual sequence or autoincrement will be used.
 
 =cut
 
-# Get the data, as a hash, but setting the primary key to whatever
-# we pass. Used by copy() and move()
+# Get the data, as a hash, but setting certain values to whatever
+# we pass. Used by copy() and move().
+# This can take either a primary key, or a hashref of all the columns 
+# to change.
 
 sub _data_hash {
-    my $self     = shift;
-    my @columns  = $self->columns;
-    my %data; @data{@columns} = $self->get(@columns);
-    delete $data{$self->primary};
-           $data{$self->primary} = shift if @_;
-    return \%data;
+  my $self     = shift;
+  my @columns  = $self->columns;
+  my %data; @data{@columns} = $self->get(@columns);
+  delete $data{$self->primary};
+  if (@_) {
+    my $arg = shift;
+    my %arg = ref($arg) ? %$arg : ( $self->primary => $arg );
+    @data{keys %arg} = values %arg;
+  }
+  return \%data;
 }
 
 sub copy {
@@ -416,6 +423,11 @@ have concurrency issues.
 If you're using autocommit this method will throw an exception.
 
 =cut
+
+__PACKAGE__->set_sql('GetMe', <<"", 'Main');
+SELECT %s
+FROM   %s
+WHERE  %s = ?
 
 sub rollback {
     my($self) = shift;
@@ -1037,49 +1049,59 @@ sub dbi_rollback {
 }
 
 
-=head2 search / search_like
+=head2 make_filter
 
-Simple search mechanism. This is currently through a series of helper
-methods that will undoubtedly change in future releases as we abstract
-the whole SQL concept further. Don't rely on any of the private methods
-here.
+  __PACKAGE__->make_filter(method_name => 'SQL_where_clause');
+
+This allows you to set up simple filters (searches). It will create
+a method, named after the first parameter, which will execute a
+SELECT based on the restriction passed, which should be a valid
+SQL 'WHERE' clause. In many cases you'll also want to create a method
+that hides some of this from the end user:
+
+ Film->make_filter(many_sheep => '%s > ?');
+
+ sub lots_of_exploding_sheep {
+   my $self = shift;
+   $self->many_sheep('NumExplodingSheep', 5);
+ }
 
 =cut
 
-__PACKAGE__->set_sql('GetMe', <<"", 'Main');
-SELECT %s
-FROM   %s
-WHERE  %s = ?
+__PACKAGE__->make_filter(retrieve_all => '');
+__PACKAGE__->make_filter(search_like => '%s LIKE ?');
+__PACKAGE__->make_filter(search => '%s = ?');
 
-__PACKAGE__->set_sql('Search', <<"", 'Main');
-SELECT  %s
-FROM    %s
-WHERE   %s = ?
+sub make_filter {
+  my $class = shift;
+  $class->_invalid_object_method('make_filter()') if ref $class;
+  my $method = shift or croak("make_filter() needs a method name");
+  defined &{"$class\::$method"} and croak("$method() already exists");
 
-__PACKAGE__->set_sql('SearchLike', <<"", 'Main');
-SELECT    %s
-FROM      %s
-WHERE     %s LIKE ?
+  # Create the query
+  my $fragment = shift;
+  my $query = "SELECT %s FROM %s";
+     $query .= " WHERE $fragment" if $fragment;
+  $class->set_sql("_filter_$method" => $query);
 
-sub search {
-  my $self = shift;
-  $self->_run_search('Search', @_);
+  # Create the method
+  no strict 'refs';
+  *{"$class\::$method"} = sub {
+    my $self = shift;
+    $self->_run_filter("_filter_$method" => @_);
+  };
 }
 
-sub search_like {
-  my $self = shift;
-  $self->_run_search('SearchLike', @_);
-}
-
-sub _run_search {
+sub _run_filter {
   my $proto = shift;
   my $class = ref $proto || $proto;
-  my $SQL = shift;
-     croak "Not enough arguments to search()" unless @_ == 2;
-  my $key = $class->_normalized(shift);
-     croak "$key is not a column" unless $class->has_column($key);
-  my $val = shift;
-  my $sth = $class->_run_query($SQL, [$key], [$val]) or return;
+  my $filter = shift;
+  my $arg = ref($_[0]) ? $_[0] : {@_}; 
+  $class->normalize_hash($arg);
+  foreach my $col (keys %$arg) {
+    croak "$col is not a column" unless $class->has_column($col);
+  }
+  my $sth = $class->_run_query($filter, [keys %$arg], [values %$arg]) or return;
   return map $class->construct($_), $sth->fetchall_hash;
 }
 
@@ -1098,7 +1120,7 @@ sub _run_query {
     $sth->execute(@$vals);
   };
   if($@) {
-    $class->DBIwarn("Problems with $type");
+    $class->DBIwarn($type);
     return;
   }
   return $sth;

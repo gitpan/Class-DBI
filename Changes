@@ -1,6 +1,12 @@
-0.32  Tue Sep 11 07:47:36 BST 2001
+0.33  Sat Sep 15 12:03:17 BST 2001
+    + Added create_filter(), and with it retrieve_all()
+    + added docs on how to set-up many-to-many relationships
+    + _cascade delete now split out to allow overriding
+    + copy() and move() can now take multiple arguments to change
+       (thanks to Jonathan Swartz)
+
+0.32  Sun Sep  9 19:27:38 BST 2001
     + delete() now removes any foreign elements, to avoid orphans
-    - fix old bug in _flesh()
 
 0.31  Sun Sep  9 00:41:37 BST 2001
     + split out _column_placeholder (thanks to Jonathan Swartz)

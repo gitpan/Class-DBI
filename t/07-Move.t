@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 15;
+use Test::More tests => 17;
 
 BEGIN {
   require './t/testlib/Film.pm';
@@ -29,10 +29,13 @@ is( $more_taste->Rating, $btaste->Rating, '  with the same rating()' );
 is( $more_taste->NumExplodingSheep, $btaste->NumExplodingSheep, 
                                   '  with the same sheep' );
 
-# Move in other direction
-ok(my $worse = Film->move($more_taste, "Worse Taste"), "Move up");
+# Move in other direction, and change rating
+ok(my $worse = Film->move($more_taste, 
+     { title => "Worse Taste", rating => "18" }), "Move up");
 ok(defined $worse && $worse->isa('Film'), " it's a different film");
 is( $worse->id, "Worse Taste", "  with the correct title" );
+isnt( $worse->Rating, $more_taste->Rating, " and different rating" );
+is( $worse->Rating, 18, " (correct rating)" );
 
 # Unrelated class
 eval { Actor->move($btaste, "Bad Taste") };
