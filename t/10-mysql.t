@@ -9,7 +9,7 @@ plan skip_all => "Need Date::Simple for this test ($@)" if $@;
 eval { require 't/testlib/MyFoo.pm' };
 plan skip_all => "Need MySQL for this test ($@)" if $@;
 
-plan tests => 56;
+plan tests => 60;
 
 package main;
 
@@ -111,6 +111,15 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 	is $first, $filmid[0], "But it's the same as filmid[0]";
 }
 
+{ # cascades correctly
+	my $lenin = MyFilm->create({ title => "Leningrad Cowboys Go America" });
+	my $pimme = MyStar->create({ name => "Pimme Korhonen" });
+	my $cowboy = MyStarLink->create({ film => $lenin, star => $pimme });
+	$lenin->delete;
+	is MyStar->search(name => 'Pimme Korhonen')->count, 1, "Pimme still exists";
+	is MyStarLink->search(star => $pimme->id)->count, 0, "But in no films";
+}
+
 {
 	ok MyStar->has_many(filmids_mcpk => [ MyStarLinkMCPK => 'film', 'id' ] => 'star'),
 		"**** Multi-map via MCPK";
@@ -127,4 +136,11 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 		"Create with explicit id = 0";
 	isa_ok $f0 => 'MyFilm';
 	is $f0->id, 0, "ID of 0";
+}
+
+{ # create doesn't mess with my hash.
+	my %info = ( Name => "Catherine Wilkening" );
+	my $cw = MyStar->find_or_create(\%info);
+	is scalar keys %info, 1, "Our hash still has only one key";
+	is $info{Name}, "Catherine Wilkening", "Still same name";
 }

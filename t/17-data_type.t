@@ -12,7 +12,7 @@ use Binary;
 eval { Binary->CONSTRUCT; };
 if ($@) {
 	diag <<SKIP;
-Pg connection failed. Set env variables DBD_PG_DBNAME,  DBD_PG_USER,
+Pg connection failed ($@). Set env variables DBD_PG_DBNAME,  DBD_PG_USER,
 DBD_PG_PASSWD to enable testing.
 SKIP
 	plan skip_all => 'Pg connection failed.';
@@ -20,11 +20,14 @@ SKIP
 
 plan tests => 40;
 
+Binary->data_type(bin => DBI::SQL_BINARY);
+Binary->db_Main->{ AutoCommit } = 0;
+
 for my $id (1 .. 10) {
 	my $bin = "foo\0$id";
 	my $obj = Binary->create(
 		{
-			id  => $id,
+			# id  => $id,
 			bin => $bin,
 		}
 	);
@@ -35,6 +38,14 @@ for my $id (1 .. 10) {
 	$obj->bin("bar\0$id");
 	$obj->update;
 
-	is $obj->bin, "bar\0$id", "update: bin ok";
+	if ($obj->id % 2) {
+		$obj->dbi_commit;
+		my $new_obj = $obj->retrieve($obj->id);
+		is $obj->bin, "bar\0$id", "update: bin ok";
+	} else {
+		$obj->dbi_rollback;
+		my $new_obj = $obj->retrieve($obj->id);
+		is $new_obj, undef, "Rolled back";
+	}
 }
 

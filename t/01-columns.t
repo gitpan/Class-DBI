@@ -62,9 +62,9 @@ is_deeply [ sort CD->columns('Essential') ] => [qw/artist/],
 	ok(!State->columns('Nonsense'), "No Nonsense group");
 	ok(State->is_column('capital'), 'is_column deprecated');
 }
-ok(State->has_column('Rain'), 'has_column Rain');
-ok(State->has_column('rain'), 'has_column rain');
-ok(!State->has_column('HGLAGAGlAG'), '!has_column HGLAGAGlAG');
+ok(State->find_column('Rain'), 'find_column Rain');
+ok(State->find_column('rain'), 'find_column rain');
+ok(!State->find_column('HGLAGAGlAG'), '!find_column HGLAGAGlAG');
 
 ok(!State->can('Rain'), 'No Rain accessor set up');
 ok(State->can('Rainfall'),           'Rainfall accessor set up');

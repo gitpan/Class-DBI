@@ -8,7 +8,7 @@ use File::Temp qw/tempdir/;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 22);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 26);
 }
 
 use File::Temp qw/tempfile/;
@@ -24,8 +24,10 @@ use base 'Class::DBI';
 sub wibble { shift->croak("Croak dies") }
 
 {    # setting DB name to not-Main causes warning:
-	local $SIG{__WARN__} = sub { ::like $_[0], qr/Main/, "DB name warning" };
+	my $did_warn = 0;
+	local $SIG{__WARN__} = sub { $did_warn++ if shift =~ /named.*Main/ };
 	Holiday->set_db(Foo => @DSN);
+	::is $did_warn, 1, "DB connection must be named Main";
 	my $dbh = Holiday->db_Main;
 	::ok $dbh->{AutoCommit}, "AutoCommit turned on";
 }
@@ -61,9 +63,9 @@ sub wibble { shift->croak("Croak dies") }
 	eval { Holiday->add_constraint };
 	::like $@, qr/needs a name/, "Constraint with no name";
 	eval { Holiday->add_constraint('check_mate') };
-	::like $@, qr/needs a column/, "Constraint needs a column";
+	::like $@, qr/needs a valid column/, "Constraint needs a column";
 	eval { Holiday->add_constraint('check_mate', 'jamtart') };
-	::like $@, qr/not a column/, "No such column";
+	::like $@, qr/needs a valid column/, "No such column";
 	eval { Holiday->add_constraint('check_mate', 'new') };
 	::like $@, qr/needs a code ref/, "Need a coderef";
 	eval { Holiday->add_constraint('check_mate', 'new', {}) };
@@ -98,10 +100,27 @@ like $@, qr/a hashref/, "Can't create without hashref";
 eval { my $foo = Holiday->construct({ id => 1 }); };
 like $@, qr/protected method/, "Can't call construct";
 
+{
+	my $foo = bless {}, 'Holiday';
+	local $SIG{__WARN__} = sub { die $_[0] };
+	eval { $foo->has_a(date => 'Date::Simple') };
+	like $@, qr/object method/, "has_a is class-level";
+}
+
 eval { Holiday->update; };
 like $@, qr/class method/, "Can't call update as class method";
 
 is(Holiday->table, 'holiday', "Default table name");
 
 Holiday->_flesh('Blanket');
+
+eval { Holiday->ordered_search() };
+like $@, qr/order_by/, "ordered_search no longer works";
+
+eval { Holiday->create({ yonkey => 84 }) };
+like $@, qr/not a column/, "Can't create with nonsense column";
+
+eval { Film->_require_class('Class::DBI::__::Nonsense') };
+like $@, qr/Can't locate/, "Can't require nonsense class";
+
 

@@ -3,6 +3,7 @@ MANIFEST
 Makefile.PL
 README
 lib/Class/DBI.pm
+lib/Class/DBI/Column.pm
 lib/Class/DBI/ColumnGrouper.pm
 lib/Class/DBI/Iterator.pm
 lib/Class/DBI/Query.pm

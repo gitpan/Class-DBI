@@ -7,8 +7,10 @@ use MyStarLink;
 use strict;
 
 __PACKAGE__->set_table();
-__PACKAGE__->columns(All     => qw/filmid title/);
-__PACKAGE__->has_many(_stars => MyStarLink => 'film');
+__PACKAGE__->columns(All => qw/filmid title/);
+__PACKAGE__->hasa_list(MyStarLink => ['film'] => '_stars');
+
+sub _carp { }
 
 sub stars { map $_->star, shift->_stars }
 

@@ -43,7 +43,7 @@ Significant changes:
 CHANGE_WARN
 }
 
-sub MY::postamble {
+sub MY::postamble { # DBD_PG_USER=tony make cover
 	return <<''
 cover:
 	rm -rf cover_db
@@ -56,13 +56,15 @@ WriteMakefile(
 	NAME                => $PACKAGE,
 	VERSION_FROM        => 'lib/Class/DBI.pm',
 	PREREQ_PM           => {
-		'Class::Accessor'          => '0.16',
+		'Class::Accessor'          => '0.18',
 		'Class::Data::Inheritable' => '0.02',
 		'Class::Trigger'           => '0.07',
 		'File::Temp'               => '0.12',
 		'Ima::DBI'                 => '0.29',
+		'List::Util'               => '1.00',
 		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',
+		'UNIVERSAL::moniker'       => '0.02',
   },
 	dist              => { 
 		COMPRESS   => 'gzip -9',

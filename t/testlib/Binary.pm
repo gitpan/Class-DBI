@@ -12,23 +12,18 @@ __PACKAGE__->set_db(
 	Main => "dbi:Pg:dbname=$db",
 	$user, $pass, { AutoCommit => 1 }
 );
-__PACKAGE__->table(bintest => 'bintest');
-__PACKAGE__->columns(All   => qw(id bin));
-__PACKAGE__->data_type(bin => DBI::SQL_BINARY);
+__PACKAGE__->table(cdbibintest => 'cdbibintest');
+__PACKAGE__->sequence('binseq');
+__PACKAGE__->columns(All => qw(id bin));
+
+# __PACKAGE__->data_type(bin => DBI::SQL_BINARY);
 
 sub CONSTRUCT {
 	my $class = shift;
-	$class->db_Main->do(<<'SQL');
-CREATE TABLE bintest (id INTEGER, bin BYTEA)
-SQL
-	eval <<EVAL;
-END {
-    Binary->db_Main->do(<<'SQL');
-DROP TABLE bintest
-SQL
-    ;
-}
-EVAL
+	eval { Binary->db_Main->do('DROP TABLE cdbibintest') };
+	$class->db_Main->do(qq{CREATE TABLE cdbibintest (id INTEGER, bin BYTEA)});
+	$class->db_Main->do(qq{CREATE TEMPORARY SEQUENCE binseq});
+	eval qq{ END { Binary->db_Main->do('DROP TABLE cdbibintest') }};
 }
 
 1;

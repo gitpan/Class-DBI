@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 21);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 24);
 }
 
 @YA::Film::ISA = 'Film';
@@ -61,6 +61,12 @@ is(
 	'Peter Jackson',
 	"Didnt interfere with each other"
 );
+
+{ # Ensure search can take an object
+	my @films = Film->search(Director => $pj);
+	is @films, 1, "1 Film directed by $pj";
+	is $films[0]->id, "Bad Taste", "Bad Taste";
+}
 
 inheriting_hasa();
 
@@ -150,4 +156,11 @@ my $foo = Foo->create({ id => 6, fav => 'Bad Taste' });
 my $bar = Bar->create({ id => 2, fav => 6 });
 isa_ok($bar->fav, "Foo");
 isa_ok($foo->fav, "Film");
+
+{ 
+	my $foo;
+	Foo->add_trigger(after_create => sub { $foo = shift->fav });
+	my $gwh = Foo->create({ id => 93, fav => 'Good Will Hunting' });
+	isa_ok $foo, "Film", "Object in after_create trigger";
+}
 

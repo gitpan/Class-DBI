@@ -7,7 +7,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 7);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 9);
 }
 
 INIT {
@@ -41,5 +41,15 @@ INIT {
 	my $still = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We still have Bad Taste";
 	is $btaste->numexplodingsheep, 1, "with 1 sheep";
+}
+
+{
+	my $sheep = Film->maximum_value_of('numexplodingsheep');
+	is $sheep, 1, "1 exploding sheep";
+	{
+		local *Ima::DBI::st::execute = sub { die "Database died" };
+		my $sheep = eval { Film->maximum_value_of('numexplodingsheep') };
+		::like $@, qr/select.*Database died/s, "Handle database death in single value select";
+	}
 }
 

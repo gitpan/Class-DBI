@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 10);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 16);
 }
 
 INIT {
@@ -26,6 +26,11 @@ Film->might_have(info => Blurb => qw/blurb/);
 	ok my $bt = Film->retrieve('Bad Taste'), "Get Film";
 	isa_ok $bt, "Film";
 	is $bt->info, undef, "No blurb yet";
+	# bug where we couldn't write a class with a might_have that didn't_have
+	$bt->rating(16);
+	eval { $bt->update };
+	is $@, '', "No problems updating when don't have";
+	is $bt->rating, 16, "Updated OK";
 }
 
 {
@@ -38,4 +43,21 @@ Film->might_have(info => Blurb => qw/blurb/);
 	ok $bt->blurb("New blurb"), "We can set the blurb";
 	$bt->update;
 	is $bt->blurb, $info->blurb, "Blurb has been set";
+
+	$bt->rating(18);
+	eval { $bt->update };
+	is $@, '', "No problems updating when do have";
+	is $bt->rating, 18, "Updated OK";
+
+	# cascade delete?
+	{
+		my $blurb = Blurb->retrieve('Bad Taste');
+		isa_ok $blurb => "Blurb";
+		$bt->delete;
+		$blurb = Blurb->retrieve('Bad Taste');
+		is $blurb, undef, "Blurb has gone";
+	}
+		
 }
+
+	

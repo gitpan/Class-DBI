@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 18);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 23);
 }
 
 INIT {
@@ -15,6 +15,8 @@ INIT {
 	OtherFilm->CONSTRUCT;
 	Actor->CONSTRUCT;
 }
+
+local $SIG{__WARN__} = sub { ::pass("deprecated warnings") };
 
 ok(my $btaste = Film->retrieve('Bad Taste'), "Fetch Bad Taste again");
 

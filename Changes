@@ -1,3 +1,59 @@
+0.94  Wed Aug 27 2003
+
+	New Functionality
+		- allow has_a() columns to hold NULL values (Dominic Mitchell)
+		- cascading deletions can be turned off by passing argument to
+		  has_many setup: no_cascade_delete => 1 (undocumented/untested)
+		  [now implemented as a trigger]
+		- classes and objects can be marked as read_only (experimental and
+		  undocumented, although tested)
+
+	Documentation
+		- no longer refer to Class::DBI::Join, which is dead
+		- warn about inflating a primary key using has_a
+		- rewrite of docs on transactions
+		- numerous small tweaks from Jay Strauss, Alexander Karelas and Brad
+		  Bowman
+		- redocument dbi_commit and dbi_rollback that have vanished...
+
+	Bug Fixes
+		- make sequences work again (Dominic Mitchell) [now with tests!]
+		- interpolation of __TABLE__ etc now happens globally, rather than
+		  only once [Corion]
+		- might_have now properly does a cascading delete
+		- Fixed problem where we can't update an object which might_have a
+		  relationship, but doesn't.
+		- might_have's tentative, but broken, support for MCPK has been
+		  removed.
+		- Increase Class::Accessor pre-requisite to 0.18 to fix strange bug
+		  reported by Casey West.
+		- Make sure we don't alter the hashref being passed to create()
+		- The after_create() trigger is now called after the object is
+		  emptied, and will thus be able to see objects in has_a columns
+		  (by reloading from the DB) [If you were using this
+		  trigger to alter the columns to be cleaned out this
+		  can (for now) be done using the 'create' trigger,
+		  although that's deprecated. Let me know if you really
+		  need this ability.
+
+	Deprecations
+		- move() is deprecated. The concept is broken and will be removed
+		  unless someone convinces me to keep it.
+		- normalize* are no longer necessary, due to the new Column objects,
+		  which store their normalized and unnormalize form. (Calling these
+		  will have no effect, other than a warning).
+		- has_column deprecated in favour of find_column
+
+	Other
+		- init() now takes hash to instantiate with (Tim Bunce)
+		- Rewrite of _require_class, with better short-circuiting and error
+		  message reporting (Tim Bunce)
+		- new Class::DBI::Column to represent a column. Some functionality
+		  moved from ColumnGrouper to here.
+		- mutator and accessor name overrides now stored in column, and not
+		  looked up every time.
+		- attempt to trap and propogate all DBI failures 
+
 0.93  Wed Jul 2 2003
 
 	New Functionality

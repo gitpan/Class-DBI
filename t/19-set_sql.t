@@ -19,14 +19,12 @@ my $f4 = Film->create({ title => 'D', director => 'BA', rating => '18' });
 my $f5 = Film->create({ title => 'E', director => 'AA', rating => '18' });
 
 Film->set_sql(
-	pgs => sprintf qq{
-	SELECT %s
-	FROM   %s
-	WHERE  rating = 'PG'
-	ORDER BY title DESC
-},
-	Film->primary_column, Film->table
-);
+	pgs => qq{
+	SELECT __ESSENTIAL__
+	FROM   __TABLE__
+	WHERE  __TABLE__.rating = 'PG'
+	ORDER BY title DESC 
+});
 
 {
 	(my $sth = Film->sql_pgs())->execute;
@@ -44,14 +42,12 @@ Film->set_sql(
 };
 
 Film->set_sql(
-	rating => sprintf qq{
-	SELECT %s
-	FROM   %s
+	rating => qq{
+	SELECT __ESSENTIAL__
+	FROM   __TABLE__
 	WHERE  rating = ?
-	ORDER BY title DESC
-},
-	Film->primary_column, Film->table
-);
+	ORDER BY title DESC 
+});
 
 {
 	my @pgs = Film->search_rating('18');

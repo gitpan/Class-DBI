@@ -10,7 +10,7 @@ BEGIN {
 	use Actor;
 	Film->CONSTRUCT;
 	Actor->CONSTRUCT;
-	Film->has_many(actors => Actor => 'Film', { sort => 'name' });
+	Film->has_many(actors => Actor => { sort => 'name' });
 	Actor->has_a(Film => 'Film');
 }
 

@@ -17,15 +17,15 @@ INIT {
 }
 
 ok(eq_set([ Lazy->columns('Primary') ],   [qw/this/]),      "Pri");
-ok(eq_set([ Lazy->columns('Essential') ], [qw/this opop/]), "Essential");
-ok(eq_set([ Lazy->columns('things') ],    [qw/this that/]), "things");
-ok(eq_set([ Lazy->columns('horizon') ],   [qw/eep orp/]),   "horizon");
-ok(eq_set([ Lazy->columns('vertical') ],  [qw/oop opop/]),  "vertical");
-ok(eq_set([ Lazy->columns('All') ], [qw/this that eep orp oop opop/]), "All");
+ok(eq_set([ sort Lazy->columns('Essential') ], [qw/opop this/]), "Essential");
+ok(eq_set([ sort Lazy->columns('things') ],    [qw/that this/]), "things");
+ok(eq_set([ sort Lazy->columns('horizon') ],   [qw/eep orp/]),   "horizon");
+ok(eq_set([ sort Lazy->columns('vertical') ],  [qw/oop opop/]),  "vertical");
+ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]), "All");
 
 {
 	my @groups = Lazy->_cols2groups(qw/this/);
-	ok eq_set(\@groups, [qw/Primary Essential things/]), "this (@groups)";
+	ok eq_set([ sort @groups], [qw/things Essential Primary/]), "this (@groups)";
 }
 
 {
