@@ -1,6 +1,25 @@
-0.36  Thu Nov  1 15:43:40 GMT 2001
-    + tests don't die horribly if you don't have MySQL installed
+0.86 Fri Mar  8 12:27:06 GMT 2002
+    * removed support for pseudo-hashes
+    * hasa_list is now has_many 
+      (although has_many still exists for backwards compatability)
+    + has_many auto-generates reciprocal hasa decalaration
+       (unless called as hasa_list, or with { nohasa => 1 })
+    * searches now return iterators when used in scalar context
+    - hooks are now called 'triggers' (using Class::Trigger)
+    * new trigger for SELECT
+    * added basic constraints
+    + added support for filters on the same column
+      (%s >= ? OR %s <= ?) 
+    + added 'between' filter which provides this
+    - deal better with the case where the only column group is 'All'
+    - much internal twiddly stuff
+
+0.36  Wed Nov 28 12:28:22 GMT 2001
+    + tests no loner die horribly if you don't have MySQL installed
     - minor tweaks to some error messages
+    - bugfixes for problems with auto-deleting objects
+    - bugfix for mis-normalized accessor warning
+       (thanks to Schwern)
 
 0.35  Sun Oct  7 19:54:11 BST 2001
     + added hooks for create, update and delete
@@ -10,7 +29,7 @@
     - Don't die if a value is a reference. (Ima::DBI does this for us,
        and better in case of overloaded objects)
     - fix minor problem with mutual hasa / hasa_list referencing
-    - better diagnostics is hasa_list is miscalled
+    - better diagnostics if hasa_list is miscalled
 
 0.33  Sat Sep 15 12:03:17 BST 2001
     + Added create_filter(), and with it retrieve_all()

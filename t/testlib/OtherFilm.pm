@@ -1,12 +1,8 @@
 package OtherFilm;
 
 use strict;
-use base qw(Film);
-use File::Temp qw/tempdir/;
+use base 'Film';
 
-my $dir = tempdir( CLEANUP => 1 );
-
-__PACKAGE__->set_db('Main', "DBI:CSV:f_dir=$dir", '', '');
 __PACKAGE__->table('Different_Film');
 
 sub CONSTRUCT {

@@ -1,16 +1,16 @@
 use strict;
-use Test::More tests => 16;
+use Test::More tests => 24;
 
 #-------------------------------------------------------------------------
 package State;
 
-use base qw(Class::DBI);
+use base 'Class::DBI';
 
 State->table('State');
 State->columns('Primary',   'Name');
-State->columns('Essential', qw( Name Abbreviation ));
-State->columns('Weather',   qw( Rain Snowfall ));
-State->columns('Other',     qw( Capital Population ));
+State->columns('Essential', qw/Abbreviation/);
+State->columns('Weather',   qw/Rain Snowfall/);
+State->columns('Other',     qw/Capital Population/);
 
 sub mutator_name { 
   my ($class, $column) = @_;
@@ -18,19 +18,49 @@ sub mutator_name {
 }
 
 sub Snowfall { 1 }
+#-------------------------------------------------------------------------
+package CD;
+use base 'Class::DBI';
 
+CD->table('CD');
+CD->columns('All' => qw/artist title length/);
 #-------------------------------------------------------------------------
 
 package main;
 
-is( State->table, 'State', 'table()'   );
-ok( eq_array([State->columns('Primary')], ['name']), 'primary()' );
-ok( eq_array([sort State->columns('All')], 
-             [sort qw/name abbreviation rain snowfall capital population/]), 
-     'all columns OK' );
-ok( State->is_column('Rain'),         'is_column(), true' );
-ok( State->is_column('rain'),         'is_column(), true, case insensitive' );
-ok( !State->is_column('HGLAGAGlAG'),   'is_column(), false');
+is (State->table, 'State', 'table()');
+is (State->primary, 'name', 'primary()');
+
+ok eq_set(
+     [State->columns('Primary')],   [qw/name/]
+   ), 'Primary cols:' . join ", ", State->columns('Primary');
+ok eq_set(
+     [State->columns('Essential')], [qw/name abbreviation/]
+   ), 'Essential cols:' . join ", ",  State->columns('Essential');
+ok eq_set(
+     [State->columns('All')], 
+     [qw/name abbreviation rain snowfall capital population/]
+   ), 'All cols:'. join ", ", State->columns('All');
+
+is (CD->primary, 'artist', 'primary()');
+ok eq_set(
+     [CD->columns('All')], [qw/artist title length/]
+   ), 'All cols:'. join ", ", CD->columns('All');
+ok eq_set(
+     [CD->columns('Essential')], [qw/artist title length/]
+   ), 'Essential cols:'. join ", ", CD->columns('Essential');
+ok eq_set(
+     [CD->columns('Primary')],   [qw/artist/]
+   ), 'Primary cols:'. join ", ", CD->columns('Primary');
+
+
+{ local $SIG{__WARN__} = sub { ok 1, "Error thrown" };
+  ok (!State->columns('Nonsense'), "No Nonsense group");
+}
+ok( State->has_column('Rain'),        'has_column Rain');
+ok( State->has_column('rain'),        'has_column rain');
+ok( !State->has_column('HGLAGAGlAG'), '!has_column HGLAGAGlAG');
+ok( State->is_column('capital'),      'is_column');
 
 ok( State->can('Rain'),               'accessor set up');
 ok( State->can('_Rain_accessor'),     ' with alias');
@@ -43,5 +73,4 @@ ok( State->can('_Snowfall_accessor'),     ' with alias');
 ok( !State->can('snowfall'),              ' (not normalized)');
 ok( State->can('set_Snowfall'),           'overriden mutator');
 ok( State->can('_set_Snowfall_accessor'), ' with alias');
-
 

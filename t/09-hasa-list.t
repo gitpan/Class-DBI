@@ -1,12 +1,13 @@
 use strict;
-use Test::More tests => 17;
+use Test::More tests => 22;
 
 BEGIN {
   require './t/testlib/Film.pm';
   require './t/testlib/Actor.pm';
   Film->CONSTRUCT;
   Actor->CONSTRUCT;
-  Film->hasa_list('Actor', ['Film'], 'actors');
+  Film->has_many(actors => Actor => 'Film', { sort => 'name' });
+  is(Actor->primary, 'name', "Actor primary OK");
 }
 
 ok(Actor->can('Salary'), "Actor table set-up OK");
@@ -16,9 +17,10 @@ ok( my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 
 ok(my $pvj = Actor->create({ 
   Name       => 'Peter Vere-Jones',
-  Film       => 'Bad Taste',
+  Film       => $btaste,
   Salary     => '30_000',  # For a voice!
 }), 'create Actor' );
+is $pvj->Name, "Peter Vere-Jones", "PVJ name ok";
 {
   my @actors = $btaste->actors;
   is(@actors, 1, "Bad taste has one actor");
@@ -27,19 +29,18 @@ ok(my $pvj = Actor->create({
 
 ok( my $pj = Actor->create({ 
   Name       => 'Peter Jackson',
-  Film       => 'Bad Taste',
+  Film       => $btaste,
   Salary     => '0',  # it's a labour of love
 }), 'add another actor' );
+is $pj->Name, "Peter Jackson", "PJ ok";
+is $pvj->Name, "Peter Vere-Jones", "PVJ still ok";
+
 
 {
   my @actors = $btaste->actors;
   is(@actors, 2, " - so now we have 2");
-  # Can't guarantee the order they'll be returned in
-  if ($actors[0]->Name eq $pvj->Name) {
-    is($actors[1]->Name, $pj->Name, " - the correct one");
-  } else {
-    is($actors[0]->Name, $pj->Name, " - the correct one");
-  }
+  is $actors[0]->Name, $pj->Name, "PJ first";
+  is $actors[1]->Name, $pvj->Name, "PVJ first";
 }
 
 my $as = Actor->create({ 

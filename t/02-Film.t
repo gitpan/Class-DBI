@@ -1,27 +1,27 @@
 use strict;
-use Test::More tests => 32;
+use Test::More tests => 41;
 
+$|=1;
 require './t/testlib/Film.pm';
-Film->CONSTRUCT;
+ok Film->CONSTRUCT, "Construct Film table";
 
 ok( Film->can('db_Main'), 'set_db()'  );
 
 my $btaste = Film->retrieve('Bad Taste');
-is( ref $btaste, 'Film', 'new()'     );
+isa_ok $btaste, 'Film';
 is( $btaste->Title, 'Bad Taste', 'Title() get'   );
 is( $btaste->Director, 'Peter Jackson', 'Director() get'    );
 is( $btaste->Rating, 'R', 'Rating() get'      );
 is( $btaste->NumExplodingSheep, 1, 'NumExplodingSheep() get'   );
 
-Film->create({ Title       => 'Gone With The Wind',
-               Director        => 'Bob Baggadonuts',
-               Rating      => 'PG',
-               NumExplodingSheep   => 0
-             });
-
-# Retrieve the 'Gone With The Wind' entry from the database.
-my $gone = Film->retrieve('Gone With The Wind');
-is( ref $gone, 'Film', 'retrieve()'    );
+ok my $gone = Film->create({ Title       => 'Gone With The Wind',
+  Director           => 'Bob Baggadonuts',
+  Rating             => 'PG',
+  NumExplodingSheep  => 0
+}), "Add Gone With The Wind";
+isa_ok $gone, 'Film';
+ok $gone = Film->retrieve('Gone With The Wind'), "Fetch it back again";
+isa_ok $gone, 'Film';
 
 # Shocking new footage found reveals bizarre Scarlet/sheep scene!
 is( $gone->NumExplodingSheep, 0,    'NumExplodingSheep() get again'     );
@@ -56,8 +56,7 @@ ok( $blrunner->Title      eq 'Bladerunner'        &&
     $blrunner->Rating     eq 'R'                  &&
     $blrunner->NumExplodingSheep == 0, ' ... with correct data');
 
-# Make a copy of 'Bladerunner' and create an entry of the director's
-# cut from it.
+# Make a copy of 'Bladerunner' and create an entry of the directors cut
 my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
 is( ref $blrunner_dc, 'Film', "copy() produces a film" );
 is( $blrunner_dc->Title, "Bladerunner: Director's Cut", 'Title correct');
@@ -66,7 +65,7 @@ is( $blrunner_dc->Rating, 'R', 'Rating correct');
 is( $blrunner_dc->NumExplodingSheep, 0, 'Sheep correct');
 
 {
-  # Ishtar doesn't deserve an entry anymore.
+  # Ishtar doesnt deserve an entry anymore.
   my $ishtar = Film->create( { Title => 'Ishtar' } );
   ok( Film->retrieve('Ishtar'), 'Ishtar created');
   $ishtar->delete;
@@ -85,9 +84,9 @@ ok( eq_array([sort map { $_->id } @films],
              [sort map { $_->id } $blrunner_dc, $gone, $blrunner]),
     'the correct ones'   );
 
-# Test that a disconnect doesn't harm anything.
+# Test that a disconnect doesnt harm anything.
 Film->db_Main->disconnect;
-@films = Film->search('Rating', 'NC-17');
+@films = Film->search({ Rating => 'NC-17' });
 ok( @films == 1 && $films[0]->id eq $gone->id, 'auto reconnection'  );
 
 # Test rollback().
@@ -117,5 +116,19 @@ is( $btaste->Director, $orig_director, 'rollback()'     );
   $blrunner->NumExplodingSheep(2);
   eval { $blrunner->commit };
   ok(!$@, "Other accessors");
+}
+
+{
+  {
+    ok my $byebye = DeletingFilm->create({ 
+      Title       => 'Goodbye Norma Jean',
+      Rating      => 'PG',
+    }), "Add a deleting Film";
+
+    isa_ok $byebye, 'DeletingFilm';
+    isa_ok $byebye, 'Film';
+    ok Film->retrieve('Goodbye Norma Jean'), "Fetch it back again";
+  }
+  ok !Film->retrieve('Goodbye Norma Jean'), "It destroys itself";
 }
 

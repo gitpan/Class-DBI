@@ -4,7 +4,7 @@ MANIFEST
 Makefile.PL
 README
 lib/Class/DBI.pm
-lib/Class/DBI/Tutorial.pm
+lib/Class/DBI/Iterator.pm
 t/01-columns.t
 t/02-Film.t
 t/03-subclassing.t
@@ -15,9 +15,16 @@ t/07-Move.t
 t/08-inheritcols.t
 t/09-hasa-list.t
 t/10-mysql.t
-t/11-hooks.t
+t/11-triggers.t
+t/12-filter.t
+t/13-constraint.t
 t/testlib/Actor.pm
+t/testlib/CDBase.pm
 t/testlib/Director.pm
 t/testlib/Film.pm
 t/testlib/Lazy.pm
+t/testlib/MyBase.pm
+t/testlib/MyFilm.pm
+t/testlib/MyFoo.pm
+t/testlib/MyVideo.pm
 t/testlib/OtherFilm.pm

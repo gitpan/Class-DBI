@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 5;
+use Test::More tests => 4;
 
 # Test pseudohashes as objects.
 
@@ -26,6 +26,8 @@ ok( eq_array([More::Film->columns('Primary')], ['title']),
                                                         'phash columns()' );
 ok( More::Film->can('db_Main'),                         'phash set_db()'  );
 
-my $btaste = More::Film->retrieve('Bad Taste');
-ok( defined $btaste && $btaste->isa('More::Film'),      'phash new()' );
-ok( $btaste->Title    eq 'Bad Taste',                   'phash get'   );
+eval {
+  my $btaste = More::Film->retrieve('Bad Taste');
+};
+
+ok $@, $@;

@@ -1,12 +1,9 @@
 package Actor;
 
+require './t/testlib/CDBase.pm';
+@ISA = 'CDBase';
 use strict;
-use base 'Class::DBI';
-use File::Temp qw/tempdir/;
 
-my $dir = tempdir( CLEANUP => 1 );
-
-__PACKAGE__->set_db('Main', "DBI:CSV:f_dir=$dir", '', '');
 __PACKAGE__->table('Actor');
 __PACKAGE__->columns('All' => qw/ Name Film Salary /);
 
@@ -26,6 +23,11 @@ sub create_actors_table {
         salary          INT
      )
   });
+}
+
+sub salary_between { 
+  my ($class, $low, $high) = @_;
+  $class->between(salary => $low, salary => $high);
 }
 
 1;

@@ -1,12 +1,9 @@
 package Film;
 
+require './t/testlib/CDBase.pm';
+@ISA = 'CDBase';
 use strict;
-use base qw(Class::DBI);
-use File::Temp qw/tempdir/;
 
-my $dir = tempdir( CLEANUP => 1 );
-
-__PACKAGE__->set_db('Main', "DBI:CSV:f_dir=$dir", '', '');
 __PACKAGE__->table('Movies');
 __PACKAGE__->columns('Primary', 'Title');
 __PACKAGE__->columns('Essential', qw( Title ));
@@ -42,5 +39,10 @@ sub make_bad_taste {
     NumExplodingSheep   => 1
   });
 }
+
+package DeletingFilm;
+
+use base 'Film';
+sub DESTROY { shift->delete }
 
 1;
