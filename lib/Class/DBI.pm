@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.25';
+$VERSION = '0.26';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -58,7 +58,7 @@ sub _safe_exists {
 
 =head1 NAME
 
-  Class::DBI - Simple Object Persistance
+  Class::DBI - Simple Object Persistence
 
 
 =head1 SYNOPSIS
@@ -68,8 +68,8 @@ sub _safe_exists {
 
   # Tell Class::DBI a little about yourself.
   Film->table('Movies');
-  Film->columns(All     => qw( Title Director Rating NumExplodingSheep ));
-  Film->columns(Primary => qw( Title ));
+  Film->columns(All     => qw( Title Director Rating NumExplodingSheep));
+
   Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness',
                {AutoCommit => 1});
 
@@ -83,10 +83,10 @@ sub _safe_exists {
                         Rating      => 'R',
                         NumExplodingSheep   => 1
                       });
-  
+
   # Retrieve the 'Gone With The Wind' entry from the database.
   my $gone = Film->retrieve('Gone With The Wind');
-  
+
   # Shocking new footage found reveals bizarre Scarlet/sheep scene!
   $gone->NumExplodingSheep(5);
   $gone->Rating('NC-17');
@@ -281,7 +281,7 @@ SELECT NEXTVAL ('%s')
 sub new {
     my($proto, $data) = @_;
     my($class) = ref $proto || $proto;
-  
+
     my $self = $class->_init;
     my($primary_col) = $self->columns('Primary');
 
@@ -384,9 +384,9 @@ WHERE  %s = ?
 sub retrieve {
     my($proto, $id) = @_;
     my($class) = ref $proto || $proto;
-    
+
     my($id_col) = $class->columns('Primary');
-    
+
     my $data;
     eval {
         my $sth = $class->sql_GetMe(join(', ', $class->columns('Essential')),
@@ -401,16 +401,47 @@ sub retrieve {
         $class->DBIwarn($id, 'GetMe');
         return;
     }
-    
+
     return unless defined $data;
     
     return $class->construct($data);
 }
 
 
+=item B<construct>
+
+  my $obj = Class->construct(\%data);
+
+This is a B<protected> method and shouldn't be called by any but
+Class::DBI subclasses.  This is ENFORCED!
+
+Constructs a new object based solely on the %data given.  It treats
+that data just like the columns of a table, key is the column name,
+value is the value of that column.  This is very handy for cheaply
+setting up lots of objects that you have the data for without
+going to the database.
+
+Basically, instead of doing one SELECT to get a bunch of IDs and then
+feeding those individually to retreive() (and thus doing more SELECT
+calls), you can do one SELECT to get the essential data of an object
+(by asking columns('Essential')) and feed that data to construct().
+
+Look at the implementation of search() for a good example of its use as
+well as "Constructing a bunch of persistent objects efficiently" in
+the Class::DBI paper.
+
+=cut
+
+#'#
+
 sub construct {
     my($proto, $data) = @_;
     my($class) = ref $proto || $proto;
+
+    unless( caller->isa("Class::DBI") ) {
+        require Carp;
+        Carp::croak("construct() is a protected method of Class::DBI!");
+    }
 
     my @columns = keys %$data;
     $class->normalize(\@columns);
@@ -453,7 +484,6 @@ sub copy {
     return $self->new(\%data);
 }
 
-=pod
 
 =item B<move>
 
@@ -470,21 +500,23 @@ sequence or autoincrement is used.
 
 #'#
 sub move {
-    my($class, $old_obj) = @_;
+    my($class, $old_obj, $new_id) = @_;
 
-    assert( $class->isa(ref $old_obj) ) if DEBUG;
+    # Make sure the thing being moved and the class being moved to
+    # are related.
+    assert( $class->isa(ref $old_obj) || $old_obj->isa($class) ) if DEBUG;
 
     my($primary_col) = $old_obj->columns('Primary');
     my @columns      = $old_obj->columns;
 
-    assert( $primary_col eq $class->columns('Primary') );
+    assert( $primary_col eq ($class->columns('Primary'))[0] ) if DEBUG;
     # XXX Should probably check to see if all the columns
     # XXX are there.
 
     my %data = map { ($_ => $old_obj->get($_) ) } @columns;
 
     if( @_ == 3 ) {
-        $data{$primary_col} = shift;
+        $data{$primary_col} = $new_id;
     }
 
     return $class->new(\%data);
@@ -535,7 +567,7 @@ sub delete {
 Class::DBI inherits from Class::Accessor and thus
 provides accessor methods for every column in your subclass.  It
 overrides the get() and set() methods provided by Accessor to
-automagically handle database transactions.
+automagically handle database writing.
 
 There are two modes for the accessors to work in.  Manual commit and
 autocommit.  This is sort of analagous to the manual vs autocommit in
@@ -633,7 +665,7 @@ sub autocommit {
         return $class->__AutoCommit;
     }
 }
-            
+
 =pod
 
 =item B<commit>
@@ -725,7 +757,7 @@ sub rollback {
         $self->DBIwarn($self->id, 'GetMe');
         return;
     }
-    
+
     unless( defined $data ) {
         require Carp;
         Carp::carp("rollback failed for ".$self->id." of class $class.");
@@ -747,7 +779,7 @@ sub rollback {
 
 sub DESTROY {
     my($self) = shift;
-    
+
     if( my @changes = $self->is_changed ) {
         require Carp;
         &Carp::carp( $self->id .' in class '. ref($self) .
@@ -965,6 +997,57 @@ sub id {
 
 =pod
 
+=begin _unimplemented
+
+=item B<schema>
+
+  Class->schema(\%schema_def);
+
+This is a convenience method to give a class's schema all in one shot,
+without lots of calls to columns().  It takes a single argument which
+is a hash ref representing the table schema.  This has two keys:
+table and columns.  "table" is straightforward, it works just like
+table().
+
+"columns" has a few modes of operation.  Given an array ref, it acts just
+like a call to columns('All', ...) except it assumes the first column
+is also the primary column.  So:
+
+    Class->schema({
+                   table    => 'Movies',
+                   columns  => [qw( Title Director Rating
+                                    NumExplodingSheep )],
+                  });
+
+is the same as:
+
+    Class->table('Movies');
+    Class->columns('All', qw(Title Director Rating NumExplodingSheep));
+    Class->columns('Primary', 'Title');
+
+If "columns" is given a hash ref it considers it to be like calls to
+columns($group, @cols);  So:
+
+    Class->schema({
+           table    => 'Line_Feature',
+           columns  => {
+                        Primary   => ['TLID'],
+                        Essential => [qw( TLID FeName Chain ) ],
+                        Feature   => [qw( FeDirP FeName FeType )],
+                        Zip       => [qw( ZipL Zip4L ZipR Zip4R )],
+                       }
+    });
+
+is the same as:
+
+    Class->table('Line_Feature');
+    Class->columns('Primary', 'TLID');
+    Class->columns('Essential', qw( TLID FeName Chain ));
+    Class->columns('Feature',   qw( FeDirP FeName FeType ));
+    Class->columns('Zip',       qw( ZipL Zip4L ZipR Zip4R ));
+
+=end _unimplemented
+
 =item B<table>
 
   Class->table($table);
@@ -1066,10 +1149,14 @@ will be supported eventually)
 
 B<'Essential'> are the minimal set of columns needed to load and use
 the object.  Only the columns in this group will be loaded when an
-object is retreive()'d.  Its typically used so save memory on a class
+object is retrieve()'d.  Its typically used so save memory on a class
 that has alot of columns but most only uses a few of them.  It will
 automatically be generated from C<Class->columns('All')> if you don't
-set it yourself.
+set it yourself.  The 'Primary' column is always part of your
+'Essential' group and Class::DBI will put it there if you don't.
+
+If 'All' is given but not 'Primary' it will assume the first column in
+'All' is the primary key.
 
 If no arguments are given it will assume you want a list of All columns.
 
@@ -1106,12 +1193,10 @@ sub columns {
 
         if( $group eq 'Essential' ) {
             my($prim_col) = $class->columns('Primary');
-            unless( grep /^$prim_col$/, @columns ) {
-                require Carp;
-                Carp::carp('The primary column should be in your essential '.
-                           'group.');
+            unless( grep $_ eq $prim_col, @columns ) {
+                push @columns, $prim_col;
             }
-        }   
+        }
 
         foreach my $col (@columns) {
             $class->add_fields(PROTECTED, $col) unless 
@@ -1128,6 +1213,12 @@ sub columns {
         $class->__columns($class_columns);
 
         $class->_flush_col2group;
+
+        # This must happen at the end or else __columns() will trip
+        # over itself.
+        if( $group eq 'All' and !keys %{$class_columns->{'Primary'}} ) {
+            $class->columns('Primary', $columns[0]);
+        }
 
         return SUCCESS;
     }
@@ -1287,8 +1378,8 @@ our Film::Director example...
 
     # Set the director of Bad Taste to the Film::Director object
     # representing Peter Jackson.
-    $pj     = Film::Directory->retreive('Peter Jackson');
-    $btaste = Film->retreive('Bad Taste');
+    $pj     = Film::Director->retrieve('Peter Jackson');
+    $btaste = Film->retrieve('Bad Taste');
     $btaste->Director($pj);
 
 hasa() will try to require the foreign class for you.  If the require
@@ -1540,6 +1631,110 @@ sub set_sql {
 
 =pod
 
+=head2 Transactions
+
+Class::DBI is just now becoming dimly aware of transactions as people
+are starting to use it with PostgreSQL and Oracle.  Class::DBI
+currently works best with DBI's AutoCommit turned on, however I am
+working on making it seemless when AutoCommit is off.
+
+When using transactions with Class::DBI you must be careful to
+remember two things...
+
+=over 4
+
+=item 1
+
+Your database handles are B<shared> with possibly many other totally
+unrelated classes.  This means if you commit one class's handle you
+might actually be committing another class's transaction as well.
+
+=item 2
+
+A single class might have many database handles.  Even worse, if
+you're working with a subclass it might have handles you're not aware
+of!
+
+=back
+
+At the moment, all I can say about #1 is keep the scope of your
+transactions small, preferably down to the scope of a single method.
+I am working on a system to remove this problem.
+
+For #2 we offer the following...
+
+=over 4
+
+=item B<dbi_commit>
+
+  my $rv = Class->dbi_commit;
+  my $rv = Class->dbi_commit(@db_names);
+
+This commits the underlying handles associated with the Class.  If any
+of the commits fail, it returns false.  Otherwise true.
+
+If @db_names is not given it will commit all the database handles
+associated with this class, otherwise it will only commit those
+handles named (like 'Main' for instance).
+
+This is different than commit() so we call it dbi_commit() to
+disambiguate.
+
+This is an alias to Ima::DBI->commit().
+
+=cut
+
+sub dbi_commit {
+    my($proto, @db_names) = @_;
+    $proto->SUPER::commit(@db_names);
+}
+
+=item B<dbi_rollback>
+
+  Class->dbi_rollback;
+  Class->dbi_rollback(@db_names);
+
+Like dbi_commit() above, this rollsback all the database handles
+associated with the Class.
+
+This is an alias to Ima::DBI->rollback().
+
+=cut
+
+sub dbi_rollback {
+    my($proto, @db_names) = @_;
+    $proto->SUPER::rollback(@db_names);
+}
+
+=back
+
+So how might you use this?  At the moment, something like this...
+
+  eval {
+      # Change a bunch of things in memory
+      $obj->foo('bar');
+      $obj->this('that');
+      $obj->price(1456);
+
+      # Write them to the database.
+      $obj->commit;
+  };
+  if($@) {
+      # Ack!  Something went wrong!  Warn, rollback the transaction
+      # and flush out the object in memory as it may be in an odd state.
+      $obj->DBIwarn($obj->id, 'update price');
+      $obj->dbi_rollback;
+      $obj->rollback;
+  }
+  else {
+      # Everything's hoopy, commit the transaction.
+      $obj->dbi_commit;
+  }
+
+
+Kinda clunky, but servicable.  As I said, better things are on the way.
+
+
 =head2 Searching
 
 We provide a few simple search methods, more to show the potential of
@@ -1571,6 +1766,10 @@ sub search {
 
     $class->normalize_one(\$key);
 
+    unless( @_ == 3 ) {
+        require Carp;
+        Carp::croak("Not enough arguments to search()");
+    }
     assert($class->is_column($key)) if DEBUG;
 
     my $sth;
@@ -1648,6 +1847,18 @@ XXX Need more examples.  They'll come.
 
 =head1 CAVEATS
 
+=head2 Class::DBI and mod_perl
+
+Class::DBI was first designed for a system running under FastCGI,
+which is basically a slimmer version of mod_perl.  As such, it deals
+with both just fine, or any other persistent environment, and takes
+advantage of it by caching database and statement handles as well as
+some limited object data caching.
+
+In short, there's no problem with using Class::DBI under mod_perl.  In
+fact, it'll run better.
+
+
 =head2 Only simple scalar values can be stored
 
 SQL sucks in that lists are really complicated to store and hashes
@@ -1706,14 +1917,15 @@ If you need this feature let me know and I'll get it working.
 
 =head2 rollback() has concurrency problems
 
-=head2 Working with transactions needs to be made easier.
+=head2 Transactions yet to be completely implemented
 
-$obj->commit should DBI->commit???
-
-Need an easy way to do class-wide commit and rollback.
+dbi_commit() is a start, but not done.
 
 
 =head1 BUGS and CAVEATS
+
+Altering the primary key column current causes Bad Things to happen.
+
 
 =head2 Tested with...
 

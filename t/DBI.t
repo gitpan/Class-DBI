@@ -45,7 +45,7 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 55 }
+BEGIN { $Total_tests = 57 }
 
 
 package Film;
@@ -282,7 +282,7 @@ END {
 }
 
 Lazy->columns('Primary', qw(this));
-Lazy->columns('Essential', qw(this opop));
+Lazy->columns('Essential', qw(opop));
 Lazy->columns('things', qw(this that));
 Lazy->columns('horizon', qw(eep orp));
 Lazy->columns('vertical', qw(oop opop));
@@ -318,7 +318,7 @@ sub _init {
     no strict 'refs';
 
     my($self) = [\%{$class.'::FIELDS'}];
-    
+
     $self->{__Changed} = {};
 
     return bless $self, $class;
@@ -343,7 +343,6 @@ Film::Directors->set_db('Main', @{dbi}{'data src', 'user', 'password'},
 ::ok( Film::Directors->can('db_Main'),                        'set_db()'  );
 
 Film::Directors->columns(All     => qw(Name Birthday IsInsane));
-Film::Directors->columns(Primary => 'Name');
 Film::Directors->table('Directors');
 
 ::ok( Film::Directors->new({ Name       => 'Peter Jackson',
@@ -397,3 +396,31 @@ my $tastes_bad = YA::Film->new({ Title          => 'Tastes Bad',
 ::ok( $tastes_bad->_CoDirector_accessor eq 'Peter Jackson' );
 ::ok( $tastes_bad->Director->Name   eq 'Skippy Jackson' );
 ::ok( $tastes_bad->CoDirector->Name eq 'Peter Jackson' );
+
+
+package Different::Film;
+use base qw(Film);
+Different::Film->table('Different_Film');
+
+Different::Film->db_Main->do(<<"SQL");
+CREATE TABLE Different_Film (
+        title                   VARCHAR(255),
+        director                VARCHAR(80),
+        codirector              VARCHAR(80),
+        rating                  CHAR(5),
+        numexplodingsheep       INTEGER,
+        hasvomit                CHAR(1)
+)
+SQL
+
+{
+    my $btaste = Film->retrieve('Bad Taste');
+    my $diff_taste = Different::Film->move($btaste);
+    ::ok( defined $diff_taste && $diff_taste->isa('Different::Film'),
+                                                 'move()' );
+    ::ok( $diff_taste->id eq $btaste->id,        '  same id()' );
+}
+
+END {
+    Film->db_Main->do("DROP TABLE Different_Film");
+}

@@ -1,3 +1,16 @@
+0.26  Mon Apr  9 14:32:17 BST 2001
+    - Class->columns('All', @cols) now assumes the first column to be
+      your primary.
+    - Class->columns('Essential', @cols) now automatically includes
+      the primary column.
+    * move() was broken.  Works and tested.
+    - Updated our base requirement to get at its bugfix
+    - Updated our Ima::DBI requirement to get at commit() and rollback()
+    * Documented construct()
+    * Added docs about transactions
+    * Added dbi_commit() and dbi_rollback()
+    - Added docs about Class::DBI and mod_perl
+
 0.25  Wed Jan 10 01:54:27 EST 2001
     - The new ID is now optional for copy()
     * Added move() to move objects between classes/databases.
