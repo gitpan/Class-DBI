@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.15 2000/09/10 05:36:51 schwern Exp $
+# $Id: DBI.t,v 1.16 2000/10/05 23:07:08 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -111,8 +111,7 @@ else {
 }
 
 
-Film->set_db('Main', @{dbi}{'data src', 'user', 'password'}, 
-             {AutoCommit => 1});
+Film->set_db('Main', @{dbi}{'data src', 'user', 'password'});
 ::ok( Film->can('db_Main'),                                 'set_db()'  );
 
 # Set up a table for ourselves.

@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.24 2000/09/12 04:35:29 schwern Exp $
+# $Id: DBI.pm,v 1.27 2001/01/10 06:54:14 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.23';
+$VERSION = '0.25';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -41,9 +41,8 @@ sub _safe_exists {
         return exists $hash->{$key};
     }
     else {
-        # We can't use ref() since that won't work on objects.  This is
-        # a cheap hack to determine if its an array.
-        unless( eval { @$hash } ) {     # hash
+        # We can't use ref() since that won't work on objects.
+        if( UNIVERSAL::isa($hash, 'HASH') ) {     # hash
             return exists $hash->{$key};
         }
         # Older than 5.6 and its a pseudohash.  exists() will always return 
@@ -308,6 +307,8 @@ sub new {
     my $hasa_cols = $class->__hasa_columns || {};
     $class->normalize_hash($hasa_cols);
 
+    # For each column which can be an object (ie. hasa() was set) see if
+    # we were given an object and replace it with its id().
     while( my($col, $want_class) = each %$hasa_cols) {
         if( _safe_exists($data, $col) && ref $data->{$col} ) {
             my $obj = $data->{$col};
@@ -426,25 +427,69 @@ sub construct {
 
 =item B<copy>
 
+  $new_obj = $obj->copy;
   $new_obj = $obj->copy($new_id);
 
 This creates a copy of the given $obj both in memory and in the
 database.  The only difference is that the $new_obj will have a new
-primary identifier of $new_id.
+primary identifier.  $new_id will be used if provided, otherwise the
+usual sequence or autoincremented primary key will be used.
 
     my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
 
 =cut
 
 sub copy {
-    my($self, $new_id) = @_;
+    my($self) = shift;
 
     my($primary_col) = $self->columns('Primary');
     my @columns      = $self->columns;
-    return $self->new( { (map { ($_ => $self->get($_) ) } @columns),
-                         $primary_col => $new_id
-                       });
+    my %data = map { ($_ => $self->get($_) ) } @columns;
+
+    if( @_ ) {
+        $data{$primary_col} = shift;
+    }
+
+    return $self->new(\%data);
 }
+
+=pod
+
+=item B<move>
+
+  my $new_obj = Sub::Class->move($old_obj);
+  my $new_obj = Sub::Class->move($old_obj, $new_id);
+
+For transfering objects from one class to another.  Similar to copy(),
+an instance of Sub::Class is created using the data in $old_obj
+(Sub::Class is a subclass of $old_obj's subclass).  Like copy(),
+$new_id is used as the primary key of $new_obj, otherwise the usual
+sequence or autoincrement is used.
+
+=cut
+
+#'#
+sub move {
+    my($class, $old_obj) = @_;
+
+    assert( $class->isa(ref $old_obj) ) if DEBUG;
+
+    my($primary_col) = $old_obj->columns('Primary');
+    my @columns      = $old_obj->columns;
+
+    assert( $primary_col eq $class->columns('Primary') );
+    # XXX Should probably check to see if all the columns
+    # XXX are there.
+
+    my %data = map { ($_ => $old_obj->get($_) ) } @columns;
+
+    if( @_ == 3 ) {
+        $data{$primary_col} = shift;
+    }
+
+    return $class->new(\%data);
+}
+
 
 =pod
 
@@ -838,6 +883,72 @@ sub is_changed {
 
 =over 4
 
+=item B<set_db>
+
+  Class->set_db($db_name, $data_source, $user, $password, \%attr);
+
+For details on this method, L<Ima::DBI>.
+
+The special connection named 'Main' must always be set.  Connections
+are inherited.
+
+Its often wise to set up a "top level" class for your entire
+application to inherit from, rather than directly from Class::DBI.
+This gives you a convenient point to place system-wide overrides and
+enhancements to Class::DBI's behavior.  It also lets you set the Main
+connection in one place rather than scattering the connection info all
+over the code.
+
+  package My::Class::DBI;
+
+  use base qw(Class::DBI);
+  __PACKAGE__->set_db('Main', 'dbi:foo', 'user', 'password');
+
+
+  package My::Other::Thing;
+
+  # Instead of inheriting from Class::DBI.  We now have the Main
+  # connection all set up.
+  use base qw(My::Class::DBI);
+
+Class::DBI helps you along a bit to set up the database connection.
+set_db() normally provides its own default attributes on a per
+database basis.  For instance, if MySQL is detected, AutoCommit will
+be turned on.  Under Oracle, ChopBlanks is turned on.  As more
+databases are tested, more defaults will be added.
+
+The defaults can always be overridden by supplying your own %attr.
+
+=cut
+
+#'#
+
+my %Per_DB_Attr_Defaults = 
+  (
+   mysql        => { AutoCommit => 1 },
+   pg           => { AutoCommit => 0, ChopBlanks => 1 },
+   oracle       => { AutoCommit => 0, ChopBlanks => 1 },
+   csv          => { AutoCommit => 1 },
+   ram          => { AutoCommit => 1 },
+  );
+
+
+sub set_db {
+    my($class, $db_name, $data_source, $user, $password, $attr) = @_;
+
+    # 'dbi:Pg:dbname=foo' we want 'Pg'  I think this is enough.
+    my($driver) = $data_source =~ /^dbi:(.*?):/i;
+
+    # Combine the user's attributes with our defaults.
+    $attr = {} unless defined $attr;
+    my $default_attr = $Per_DB_Attr_Defaults{lc $driver} || {};
+    $attr = { %$default_attr, %$attr };
+
+    $class->SUPER::set_db($db_name, $data_source, $user, $password, $attr);
+}
+
+=pod    
+
 =item B<id>
 
   $id = $obj->id;
@@ -1204,7 +1315,7 @@ sub hasa {
 
     my $foreign_col_accessor = "_".$foreign_key_cols[0]."_accessor";
 
-    eval "require $foreign_class";
+    $class->_load_class($foreign_class);
 
     # This is so complicated to allow multiple columns leading to the
     # same class.
@@ -1249,6 +1360,29 @@ sub hasa {
         local $^W = 0;
         no strict 'refs';
         *{$class."\::$foreign_key_cols[0]"} = $accessor;
+    }
+}
+
+
+sub _load_class {
+    my($foreign_class) = shift;
+
+    no strict 'refs';
+
+    # Gleefully stolen from base.pm
+    unless (exists ${"$foreign_class\::"}{VERSION}) {
+        eval "require $foreign_class";
+        # Only ignore "Can't locate" errors from our eval require.
+        # Other fatal errors (syntax etc) must be reported.
+        die if $@ && $@ !~ /^Can't locate .*? at \(eval /; #';
+        unless (%{"$foreign_class\::"}) {
+            require Carp;
+            Carp::croak("Foreign class package \"$foreign_class\" is empty.\n",
+                        "\t(Perhaps you need to 'use' the module ",
+                        "which defines that package first.)");
+        }
+        ${"$foreign_class\::VERSION"} = "-1, set by Class::DBI"
+            unless exists ${"$foreign_class\::"}{VERSION};
     }
 }
 
@@ -1504,6 +1638,7 @@ sub search_like {
 
 =pod
 
+
 =head1 EXAMPLES
 
 Ummm... well, there's the SYNOPSIS.
@@ -1582,23 +1717,19 @@ Need an easy way to do class-wide commit and rollback.
 
 =head2 Tested with...
 
-=over 4
+DBD::mysql - MySQL 3.22 and 3.23
 
-=item DBD::mysql - MySQL 3.22 and 3.23
+DBD::Pg - PostgreSQL 7.0
 
-=item DBD::Pg - PostgreSQL 7.0
+DBD::CSV
 
-=item DBD::CSV
+=head2 Reports it works with...
 
-=back
+DBD::Oracle (patches still coming in)
 
 =head2 Known not to work with...
 
-=over 4
-
-=item DBD::RAM
-
-=back
+DBD::RAM
 
 
 =head1 AUTHOR

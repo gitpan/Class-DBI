@@ -1,10 +1,21 @@
+0.25  Wed Jan 10 01:54:27 EST 2001
+    - The new ID is now optional for copy()
+    * Added move() to move objects between classes/databases.
+    - Updated PG's default attributes.
+    - Made the way classes are loaded with hasa() safer
+
+0.24  Thu Oct  5 19:07:21 EDT 2000      *UNRELEASED*
+    - Fixed some $@ naughtiness.  Errors should propigate properly.
+    * Added default database attributes for Pg, MySQL, Oracle, DBD::CSV and
+      DBD::RAM.  Class::DBI should work out of the box with them now.
+
 0.23  Tue Sep 12 00:33:38 EDT 2000
     - rollback() needed to normalize its data (thanks to Greg Bartlett)
 
-0.22  Sun Sep 10 05:36:51 GMT 2000
+0.22  Sun Sep 10 05:36:51 GMT 2000      *UNRELEASED*
     - Added a warning if the primary column is not in the essential group
 
-0.21  Sun Sep 10 01:03:01 EDT 2000
+0.21  Sun Sep 10 01:03:01 EDT 2000      *UNRELEASED*
     - Now requiring Ima::DBI 0.24
     - sequence() fixed, tested and working
     - Now working with DBD::Pg and PostgreSQL 7.0
