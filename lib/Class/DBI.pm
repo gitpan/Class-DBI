@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.23 2000/09/10 05:36:51 schwern Exp $
+# $Id: DBI.pm,v 1.24 2000/09/12 04:35:29 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -554,6 +554,8 @@ The commit setting for an object is not stored in the database.
 
 Autocommitting is off by default.
 
+B<NOTE> This has I<nothing> to do with DBI's AutoCommit attribute.
+
 =cut
 
 #'#
@@ -684,6 +686,8 @@ sub rollback {
         Carp::carp("rollback failed for ".$self->id." of class $class.");
         return;
     }
+
+    $self->normalize_hash($data);
 
     # Make sure what we got from the database is what was changed.
     assert( join('', sort keys %$data) eq
