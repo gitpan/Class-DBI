@@ -1,3 +1,5 @@
+# $Id: DBI.pm,v 1.10 2000/05/02 00:27:13 schwern Exp $
+
 package Class::DBI;
 
 require 5.00502;
@@ -5,15 +7,12 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = 0.03;
+$VERSION = '0.08';
 
 use Carp::Assert;
-use base qw(Class::Accessor Ima::DBI);
+use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
-# Little trick to allow goto &Class::DBI::AUTOLOAD to work.
-*AUTOLOAD = \&Class::Accessor::AUTOLOAD;
-
-use protected qw(__Changed __AutoCommit __OrigValues);
+use protected qw(__Changed __AutoCommit);
 
 use constant TRUE       => (1==1);
 use constant FALSE      => !TRUE;
@@ -22,21 +21,53 @@ use constant FAILURE    => FALSE;
 use constant YES        => TRUE;
 use constant NO         => FALSE;
 
+
+# In perl < 5.6 exists() doesn't quite work the same on pseudohashes
+# as on regular hashes.  In order to protect ourselves we define our own
+# exists function.
+use constant PERL_VERSION => $];
+sub _safe_exists {
+    my($hash, $key) = @_;
+
+    # Because PERL_VERSION is constant this logic will
+    # be optimized away in Perl >= 5.6 and reduce to a simple
+    # statement.
+
+    # Either its 5.6 or its a hash.  Either way exists() is
+    # safe.
+    if( PERL_VERSION >= 5.006 ) {
+        return exists $hash->{$key};
+    }
+    else {
+        # We can't use ref() since that won't work on objects.  This is
+        # a cheap hack to determine if its an array.
+        unless( eval { @$hash } ) {     # hash
+            return exists $hash->{$key};
+        }
+        # Older than 5.6 and its a pseudohash.  exists() will always return 
+        # true, so we use defined() instead as a cheap hack.
+        else {
+            return defined $hash->{$key};
+        }
+    }
+}
+
+
 =pod
 
 =head1 NAME
 
-  Class::DBI - Simple SQL-based object persistance
+  Class::DBI - Simple Object Persistance
 
 
 =head1 SYNOPSIS
 
   package Film;
   use base qw(Class::DBI);
-  use public qw( Title Director Rating NumExplodingSheep );
 
   # Tell Class::DBI a little about yourself.
   Film->table('Movies');
+  Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
   Film->columns('Primary', 'Title');
   Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
 
@@ -86,9 +117,9 @@ This module is for setting up a reasonably efficient, reasonably
 simple, reasonably extendable persistant object with as little SQL and
 DBI knowledge as possible.
 
-Its a subclass of Class::Accessor and uses that scheme to
-automatically set up accessors for each public data field in your
-class.  These accessors control access to the underlying database.
+Its uses a scheme to automatically set up accessors for each data
+field in your class.  These accessors control access to the underlying
+database.
 
 =head2 How to set it up
 
@@ -105,9 +136,10 @@ the documentation of your particular database for details.
 
 =item I<Set up a table for your objects to be stored in.>
 
-Class::DBI works on a simple one class/one table model.  It is
-your responsibility to set up that table, automating the process would
-introduce too many complications.
+Class::DBI works on a simple one class/one table model.  It is your
+responsibility to set up that table, automating the process would
+introduce too many complications (unless somebody wants to convince me
+otherwise).
 
 Using our Film example, you might declare a table something like this:
 
@@ -128,14 +160,17 @@ pseudohashes.
   package Film;
   use base qw(Class::DBI);
 
-=item I<Declare your public data members.>
+=item I<Declare your columns.>
 
-This can be done using fields.pm or public.pm.  The names of your
-fields should match the columns in your database, one to one.
-Class::DBI (via Class::Accessor) will use this
-information to determine how to create accessors.
+This can be done using columns().  The names of your fields should
+match the columns in your database, one to one.  Class::DBI (via
+Class::Accessor) will use this information to determine how to create
+accessors.
 
-  use public qw( Title Director Rating NumExplodingSheep );
+  Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+
+For more information about how you can more efficiently declare your columns,
+L<"Lazy Population of Columns">
 
 =item I<Declare the name of your table>
 
@@ -163,6 +198,8 @@ the set_db() method and declaring a database connection named 'Main'.
 
 set_db() is inherited from Ima::DBI.  See that module's man page for
 details.
+
+XXX I should probably make this even simpler.  set_db_main() or something.
 
 =item I<Done.>
 
@@ -197,9 +234,9 @@ might find it necessary to override them.
 
 This is a constructor to create a new object and store it in the
 database.  %data consists of the initial information to place in your
-object and the database.  The keys of %data match up with the public
-fields of your objects and the values are the initial settings of
-those fields.
+object and the database.  The keys of %data match up with the columns
+of your objects and the values are the initial settings of those
+fields.
 
 $obj is an instance of Class built out of a hash reference.
 
@@ -212,53 +249,74 @@ $obj is an instance of Class built out of a hash reference.
 
 =cut
 
+__PACKAGE__->set_sql('MakeNewObj', <<"SQL", 'Main');
+INSERT INTO %s
+       (%s)
+VALUES (%s)
+SQL
+
+
+__PACKAGE__->set_sql('LastInsertID', <<'', 'Main');
+SELECT LAST_INSERT_ID()
+
+
 sub new {
-  my($proto, $data) = @_;
-  my($class) = ref $proto || $proto;
+    my($proto, $data) = @_;
+    my($class) = ref $proto || $proto;
   
-  my $self = $class->_init;
+    my $self = $class->_init;
+    my($primary_col) = $self->columns('Primary');
 
-  # There shouldn't be more input than we have columns for.
-  assert($self->columns >= keys %$data) if DEBUG;
+    $self->normalize_hash($data);
 
-  # Everything in %data should be a column.
-  assert( !grep { !$self->is_column($_) } keys %$data ) if DEBUG;
+    # There shouldn't be more input than we have columns for.
+    assert($self->columns >= keys %$data) if DEBUG;
 
-  # You -must- have a table defined.
-  assert( $self->table ) if DEBUG;
+    # Everything in %data should be a column.
+    assert( !grep { !$self->is_column($_) } keys %$data ) if DEBUG;
 
-  # Alas, since I can't know how many items will be in %$data I cannot
-  # preconstruct this SQL statement.
-  my $sql = '';
-  $sql .= 'INSERT INTO '.$self->table."\n";
-  $sql .= '('. join(', ', keys %$data) .")\n";
-  $sql .= 'VALUES ('. join(', ', ('?') x keys %$data). ")\n";
+    # You -must- have a table defined.
+    assert( $self->table ) if DEBUG;
 
-  eval {
-    $self->db_Main->do($sql, undef,
-                       @{$data}{keys %$data});
-  };
-  if($@) {
-    $self->DBIwarn('New', 'create');
-    return;
-  }
+    my $id;
+    eval {
+        # Enter a new row into the database containing our object's
+        # information.
+        my $sth = $self->sql_MakeNewObj($self->table,
+                                        join(', ', keys %$data),
+                                        join(', ', ('?') x keys %$data)
+                                       );
+        $sth->execute(values %$data);
 
-  # Create our object by ID because the database may have filled out
-  # alot of default rows that we don't know about yet.
-  my($primary_col) = $self->columns('Primary');
-  $self = $class->retrieve($data->{$primary_col});
+        if( _safe_exists($data, $primary_col) ) {
+            $id = $data->{$primary_col};
+        }
+        else {
+            $sth = $self->sql_LastInsertID;
+            $sth->execute;
+            $data->{$primary_col} = ($sth->fetch)[0];
+            $sth->finish;
+        }
+    };
+    if($@) {
+        $self->DBIwarn('New', 'MakeNewObj');
+        return;
+    }
 
-  return $self;
+    # Create our object by ID because the database may have filled out
+    # alot of default rows that we don't know about yet.
+    $self = $class->retrieve($id);
+
+    return $self;
 }
 
 sub _init {
     my($class) = shift;
     my($self) = {};
 
-    $self->{__Changed} 		= {};
-	$self->{__OrigValues} 	= {};
+    $self->{__Changed} = {};
 
-	return bless $self, $class;
+    return bless $self, $class;
 }
 
 =pod
@@ -273,17 +331,11 @@ Given an ID it will retrieve an object with that ID from the database.
 
 =cut
 
-__PACKAGE__->make_sql('GetMe',
-					  sub {
-						  my($class) = @_;
+__PACKAGE__->set_sql('GetMe', <<"", 'Main');
+SELECT %s
+FROM   %s
+WHERE  %s = ?
 
-						  return <<"";
-                    SELECT    ${\( join(', ', $class->columns('Essential')) )}
-                    FROM      ${\( $class->table )}
-                    WHERE     ${\( $class->columns('Primary') )} = ?
-
-                      }
-                     );
 
 sub retrieve {
     my($proto, $id) = @_;
@@ -291,9 +343,12 @@ sub retrieve {
     
     my($id_col) = $class->columns('Primary');
     
-	my $data;
+    my $data;
     eval {
-        my $sth = $class->sql_GetMe;
+        my $sth = $class->sql_GetMe(join(', ', $class->columns('Essential')),
+                                    $class->table,
+                                    $class->columns('Primary')
+                                   );
         $sth->execute($id);
         $data = $sth->fetchrow_hashref;
         $sth->finish;
@@ -313,12 +368,15 @@ sub construct {
     my($proto, $data) = @_;
     my($class) = ref $proto || $proto;
 
-    my $self = $class->_init;
-    @{$self}{keys %$data} = values %$data;
+    my @columns = keys %$data;
+    $class->normalize(\@columns);
 
-	return $self;
+    my $self = $class->_init;
+    @{$self}{@columns} = values %$data;
+
+    return $self;
 }
-    
+
 
 
 =pod
@@ -339,10 +397,10 @@ sub copy {
     my($self, $new_id) = @_;
 
     my($primary_col) = $self->columns('Primary');
-    my @columns		 = $self->columns;
+    my @columns      = $self->columns;
     return $self->new( { (map { ($_ => $self->get($_) ) } @columns),
-						 $primary_col => $new_id
-					   });
+                         $primary_col => $new_id
+                       });
 }
 
 =pod
@@ -356,23 +414,18 @@ longer usable after this call.
 
 =cut
 
-__PACKAGE__->make_sql('Delete',
-                      sub {
-                          my($class) = shift;
+__PACKAGE__->set_sql('DeleteMe', <<"", 'Main');
+DELETE 
+FROM    %s
+WHERE   %s = ?
 
-                          return <<"";
-                          DELETE 
-                          FROM      ${\( $class->table )}
-                          WHERE     ${\( $class->columns('Primary') )} = ?
-
-                      }
-                     );
 
 sub delete {
     my($self) = shift;
 
     eval {
-        $self->sql_Delete->execute($self->id);
+        my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
+        $sth->execute($self->id);
     };
     if($@) {
         $self->DBIwarn($self->id, 'Delete');
@@ -392,7 +445,7 @@ sub delete {
 =head2 Accessors
 
 Class::DBI inherits from Class::Accessor and thus
-provides accessor methods for every public field in your subclass.  It
+provides accessor methods for every column in your subclass.  It
 overrides the get() and set() methods provided by Accessor to
 automagically handle database transactions.
 
@@ -451,7 +504,7 @@ for the class.
 
   Class->autocommit(1);     # Autocommit is now on for the class.
   
-  $obj->retrieve('Aliens Cut My Hair');
+  $obj = Class->retrieve('Aliens Cut My Hair');
   $obj->autocommit(0);      # Shut off autocommitting for this object.
 
 The commit setting for an object is not stored in the database.
@@ -460,10 +513,13 @@ Autocommitting is off by default.
 
 =cut
 
+#'#
+__PACKAGE__->mk_classdata('__AutoCommit');
+
 # I don't really like how this method is written.
 sub autocommit {
     my($proto) = shift;
-	my $class = ref $proto || $proto;
+    my $class = ref $proto || $proto;
 
     if(@_) {
         my $on_or_off = $_[0];
@@ -472,8 +528,7 @@ sub autocommit {
             $self->{__AutoCommit} = $on_or_off;
         }
         else {
-            no strict 'refs';
-            ${$class.'::__AutoCommit'} = $on_or_off;
+            $class->__AutoCommit($on_or_off);
         }
         return SUCCESS;
     }
@@ -484,13 +539,8 @@ sub autocommit {
             my $self = $proto;
             return $self->{__AutoCommit} if defined $self->{__AutoCommit};
         }
-		no strict 'refs';
-        if( defined ${$class.'::__AutoCommit'} ) {
-            return ${$class.'::__AutoCommit'};
-        }
-        
-        # Default setting is off.
-        return NO;
+
+        return $class->__AutoCommit;
     }
 }
             
@@ -507,35 +557,36 @@ do nothing.
 =cut
 
 #'#
+__PACKAGE__->set_sql('commit', <<"", 'Main');
+UPDATE %s
+SET    %s
+WHERE  %s = ?
+
 sub commit {
     my($self) = shift;
 
     my $table = $self->table;
     assert( defined $table ) if DEBUG;
 
-    if( $self->is_changed ) {
-		my @changed_cols = keys %{$self->{__Changed}};
+    if( my @changed_cols = $self->is_changed ) {
         my($primary_col) = $self->columns('Primary');
 
-        # Alas, this must be generated on the fly.
-        my $sql = '';
-        $sql .= "UPDATE $table\n";
-        $sql .= 'SET '. join( ', ', map { "$_ = ?" } @changed_cols) ."\n";
-        $sql .= "WHERE $primary_col = ?";
-
         eval {
-            $self->db_Main->do($sql, undef,
-                               (map { $self->{$_} } @changed_cols),
-                               $self->id
-                              );
+            my $sth = $self->sql_commit($table,
+                                        join( ', ', map { "$_ = ?" } 
+                                                    @changed_cols),
+                                        $primary_col
+                                       );
+            $sth->execute((map { $self->{$_} } @changed_cols), 
+                          $self->id
+                         );
         };
         if($@) {
             $self->DBIwarn( $primary_col, 'commit' );
             return;
         }
 
-        $self->{__Changed} 		= {};
-		$self->{__OrigValues} 	= {};
+        $self->{__Changed}  = {};
     }
 
     return SUCCESS;
@@ -567,10 +618,9 @@ sub rollback {
     return SUCCESS unless $self->is_changed;
 
     # Stick the original values back into the object.
-    @{$self}{keys %{$self->{__OrigValues}}} = values %{$self->{__OrigValues}};
+    @{$self}{keys %{$self->{__Changed}}} = values %{$self->{__Changed}};
 
-    # Dump the original values and changes.
-    $self->{__OrigValues} = {};
+    # Dump the changes.
     $self->{__Changed}    = {};
 
     return SUCCESS;
@@ -579,26 +629,93 @@ sub rollback {
 sub DESTROY {
     my($self) = shift;
     
-    if( $self->is_changed ) {
+    if( my @changes = $self->is_changed ) {
         require Carp;
-        Carp::carp( $self->id .' in class '. ref $self .
-                    ' destroyed without saving changes.');
+        &Carp::carp( $self->id .' in class '. ref $self .
+                     ' destroyed without saving changes to '.
+                     join(', ', @changes) . ".\n"
+                   );
     }
 }
 
 
 sub get {
-	my($self, @keys) = @_;
+    my($self, @keys) = @_;
 
-	if(@keys == 1) {
-		return $self->{$keys[0]};
-	}
-	elsif( @_ > 1 ) {
-		return @{$self}{@_};
-	}
-	else {
-		assert(0) if DEBUG;
-	}
+    my $col2group = $self->_get_col2group;
+
+    my @null_keys = grep { !_safe_exists($self, $_) } @keys;
+    $self->_flesh($self->_cols2groups(@null_keys)) if @null_keys;
+
+    if(@keys == 1) {
+        return $self->{$keys[0]};
+    }
+    elsif( @_ > 1 ) {
+        return @{$self}{@_};
+    }
+    else {
+        assert(0) if DEBUG;
+    }
+}
+
+
+__PACKAGE__->set_sql('Flesh', <<"SQL");
+SELECT  %s
+FROM    %s
+WHERE   %s = ?
+SQL
+
+sub _flesh {
+    my($self, @groups) = @_;
+
+    # Get a list of all columns in the given groups, removing
+    # duplicates.
+    my @cols = ();
+    {
+        my %tmp_cols;
+        @cols = grep { !$tmp_cols{$_}++ } map { $self->columns($_) } @groups;
+    }
+
+    # Don't bother with columns that have already been fleshed.
+    @cols = grep { !_safe_exists($self, $_) } @cols;
+
+    return SUCCESS unless @cols;
+
+    my $sth;
+    eval {
+        $sth = $self->sql_Flesh(join(', ', @cols),
+                                $self->table,
+                                $self->columns('Primary')
+                               );
+        $sth->execute($self->id);
+    };
+    if($@) {
+        $self->DBIwarn("Flesh", join(', ', @groups));
+        return;
+    }
+
+    my @row = $sth->fetch;
+    $sth->finish;
+    assert(@row == @cols) if DEBUG;
+    @{$self}{@cols} = @row;
+
+    return SUCCESS;
+}
+
+
+sub _cols2groups {
+    my($self, @cols) = @_;
+    
+    my %groups = ();
+    my $col2group = $self->_get_col2group;
+
+    foreach my $col (@cols) {
+        foreach my $group (@{$col2group->{$col}}) {
+            $groups{$group}++;
+        }
+    }
+    
+    return grep !/^All$/, keys %groups;
 }
 
 
@@ -611,11 +728,8 @@ sub set {
     my $value = shift;
 
     # Store the original value for rollback purposes.
-    $self->{__OrigValues}{$key} = $value unless 
-      exists $self->{__OrigValues}{$key};
-
-	# Note the change.
-	$self->{__Changed}{$key} = 1;
+    $self->{__Changed}{$key} = $self->get($key) unless 
+      exists $self->{__Changed}{$key};
 
     $self->SUPER::set($key, $value);
 
@@ -626,17 +740,18 @@ sub set {
 
 =pod
 
-=item B<is_changed()>
+=item B<is_changed>
 
-  $obj->is_changed;
+  @changed_keys = $obj->is_changed;
 
-Indicates if the given $obj has uncommitted changes.
+Indicates if the given $obj has uncommitted changes.  Returns a list of
+keys which have changed.
 
 =cut
 
 sub is_changed {
-	my($self) = shift;
-	return scalar keys %{$self->{__Changed}};
+    my($self) = shift;
+    return keys %{$self->{__Changed}};
 }
 
 =pod
@@ -657,7 +772,7 @@ $obj->get($self->columns('Primary'));
 =cut
 
 sub id {
-	my($self) = shift;
+    my($self) = shift;
     return $self->get($self->columns('Primary'));
 }
 
@@ -672,28 +787,29 @@ sub id {
 An accessor to get/set the name of the database table in which this
 class is stored.  It -must- be set.
 
+Table information is inherited by subclasses, but can be overridden.
+
 =cut
 
+__PACKAGE__->mk_classdata('__table');
+
 sub table {
-    my($proto, $table) = @_;
+    my($proto) = shift;
 
     my($class) = ref $proto || $proto;
 
     no strict 'refs';
     
-    if(defined $table) {
+    if(@_) {
         if( ref $proto ) {
             require Carp;
             Carp::carp('It is prefered to call table() as a class method '.
                        '[Class->table($table)] rather than an object method '.
                        '[$obj->table($table)] when setting the table.');
         }
-        ${$class.'::__TABLE'} = $table;
-        return SUCCESS;
     }
-    else {
-        return ${$class.'::__TABLE'};
-    }
+
+    $class->__table(@_);
 }
 
 =pod
@@ -708,29 +824,35 @@ This is an accessor to the names of the database columns of a class.
 Its used to construct SQL statements to act on the class.
 
 Columns are grouped together by typical usage, this can allow more
-efficient access by loading all columns in a group at once.  This
-basic version of the module does not take advantage of this but more
-complex subclasses do.
+efficient access by loading all columns in a group at once.  For
+more information about this, L<"Lazy Population of Columns">. 
 
 There are three 'reserved' groups.  'All', 'Essential' and 'Primary'.
 
-B<'All'> are all columns used by the class.  It will automatically be
-generated from your public data fields if you don't set it yourself.
+B<'All'> are all columns used by the class.  If not set it will be
+created from all the other groups.
 
-B<'Primary'> is the single primary key column for this class.  It I<must>
-be set before objects can be used.
-
-B<'Essential'> are the minimal set of columns needed to load and use
-the object.  Its typically used so save memory on a class that has
-alot of columns but most only uses a few of them.  It will
-automatically be generated from C<Class->columns('All')> if you don't
-set it yourself.
+B<'Primary'> is the single primary key column for this class.  It
+I<must> be set before objects can be used.  (Multiple primary keys
+will be supported eventually)
 
     Class->columns('Primary', 'Title');
 
-If the $group is not given it will assume you want 'All'.
+B<'Essential'> are the minimal set of columns needed to load and use
+the object.  Only the columns in this group will be loaded when an
+object is retreive()'d.  Its typically used so save memory on a class
+that has alot of columns but most only uses a few of them.  It will
+automatically be generated from C<Class->columns('All')> if you don't
+set it yourself.
+
+If no arguments are given it will assume you want a list of All columns.
+
+B<NOTE> I haven't decided on this method's behavior in scalar context.
 
 =cut
+
+#'#
+__PACKAGE__->mk_classdata('__columns');
 
 sub columns {
     my($proto, $group, @columns) = @_;
@@ -741,7 +863,7 @@ sub columns {
 
     # Get %__Columns from the class's namespace.
     no strict 'refs';
-    my $class_columns = \%{$class.'::__Columns'};		
+    my $class_columns = $class->__columns || {};
 
     if(@columns) {
         if( ref $proto ) {
@@ -751,20 +873,37 @@ sub columns {
                        'object method [$obj->columns($group, @cols)] when '.
                        'setting columns.');
         }
+
+        if( $group eq 'All' ) {
+            $class->_mk_column_accessors(@columns);
+        }
+
+        $class->normalize(\@columns);
+
         $class_columns->{$group} = [@columns];
+
+        # Force columns() to be overriden if necessary.
+        $class->__columns($class_columns);
+
         return SUCCESS;
     }
     else {
-		# Build $__Columns{All} if not already built.
-		if( $group eq 'All' and !exists $class_columns->{All} ) {
-			$class_columns->{All} = [$class->show_fields('Public')];
-		}
+        # Build All if we have to.
+        if( $group eq 'All' and !exists $class_columns->{All} ) {
+            my %saw;
+            my @all_cols =
+              grep(!$saw{$_}++, 
+                   map { @{$class_columns->{$_}} } keys %$class_columns
+                  );
 
-		# Build $__Columns{Essential} if not already built.
-		if( $group eq 'Essential' and !exists $class_columns->{Essential} ) {
-			# Careful to make a copy.
-			$class_columns->{Essential} = [@{$class_columns->{All}}];
-		}
+            $class->columns('All', @all_cols);
+        }
+
+        # Build Essential if not already built.
+        if( $group eq 'Essential' and !exists $class_columns->{Essential} ) {
+            # Careful to make a copy.
+            $class_columns->{Essential} = [@{$class_columns->{All}}];
+        }
 
         unless ( exists $class_columns->{$group} ) {
             require Carp;
@@ -775,6 +914,33 @@ sub columns {
         }
     }
 }
+
+{
+    no strict 'refs';
+
+    sub _mk_column_accessors {
+        my($class, @columns) = @_;
+        
+        my(@col_meths) = @columns;
+        $class->normalize(\@columns);
+        
+        assert(@col_meths == @columns) if DEBUG;
+
+        for my $idx (0..$#columns) {
+            my($col)  = $columns[$idx];
+            my $accessor = $class->make_accessor($col);
+            
+            my($meth) = $col_meths[$idx];
+            my $alias    = "_${meth}_accessor";
+            
+            *{$class."\::$meth"} = $accessor
+              unless defined &{$class."\::$meth"};
+            *{$class."\::$alias"} = $accessor
+              unless defined &{$class."\::$alias"};
+        }
+    }
+}
+    
 
 =pod
 
@@ -792,31 +958,143 @@ sub is_column {
     my($proto, $column) = @_;
     my($class) = ref $proto || $proto;
 
+    $class->normalize_one(\$column);
+
     my $col2group = $class->_get_col2group;
 
     return scalar @{$col2group->{$column}};
 }
 
 
+__PACKAGE__->mk_classdata('__Col2Group');
+
 sub _get_col2group {
     my($proto) = shift;
     my($class) = ref $proto || $proto;
 
     no strict 'refs';   
-    my $col2group = \%{$class.'::__Col2Group'};
+    my $col2group = $class->__Col2Group || {};
 
     # Build %__Col2Group if necessary.
     unless( keys %$col2group ) {
-        while( my($group, $cols) = each %{$class.'::__Columns'} ) {
+        while( my($group, $cols) = each %{$class->__columns} ) {
             foreach my $col (@$cols) {
                 push @{$col2group->{$col}}, $group;
             }
         }
+        
+        # Allow __Col2Group to override itself if necessary.
+        $class->__Col2Group($col2group);
     }
 
     return $col2group;
 }
     
+
+=pod
+
+=back
+
+=head2 Lazy Population of Columns
+
+In the tradition of Perl, Class::DBI is lazy about how it loads your
+objects.  Often, you find yourself using only a small number of the
+available columns and it would be a waste of memory to load all of
+them just to get at two, especially if you're dealing with large
+numbers of objects simultaneously.
+
+Class::DBI will load a group of columns together.  You access one
+column in the group, and it will load them all on the assumption that
+if you use one you're probably going to use the rest.  So for example,
+say we wanted to add NetProfit and GrossProfit to our Film class.
+You're probably going to use them together, so...
+
+    Film->columns('Profit', qw(NetProfit GrossProfit));
+
+Now when you say:
+
+    $net = $film->NetProfit;
+
+Class::DBI will load both NetProfit and GrossProfit from the database.
+If you then call GrossProfit() on that same object it will not have to
+hit the database.  This can potentially increase performance (YMMV).
+
+
+If you don't like this behavior, just create a group called 'All' and
+stick all your columns into it.  Then Class::DBI will load everything
+at once.
+
+
+=head2 Data Normalization
+
+SQL is largely case insensitive.  Perl is largely not.  This can lead
+to problems when reading information out of a database.  Class::DBI
+does some data normalization.
+
+=over 4
+
+=item B<normalize>
+
+  $obj->normalize(\@columns);
+
+There is no guarantee how a database will muck with the case of
+columns, so to protect against things like DBI->fetchrow_hashref()
+returning strangely cased column names (along with table names
+appended to the front) we normalize all column names before using them
+as data keys.
+
+=cut
+
+sub normalize {
+    my($self, $columns) = @_;
+    
+    assert(@$columns > 0) if DEBUG;
+
+    foreach my $col (@$columns) {
+        $col =~ s/^.*\.//;  # Chop off the possible table & database names.
+        # 0A is ASCII 11 vertical tab.
+        $col =~ tr/ \t\n\r\f\x0A/______/;  # Translate whitespace to _
+        $col = lc $col;
+    }
+    
+    return SUCCESS;
+}
+
+
+# XXX Icky hack.
+sub normalize_one {
+    my($self, $col) = @_;
+
+    my @cols = ($$col);
+    $self->normalize(\@cols);
+    $$col = $cols[0];
+}
+
+
+=pod
+
+=item B<normalize_hash>
+
+    $obj->normalize_hash(\%hash);
+
+Given a %hash, it will normalize all its keys using normalize().
+This is for convenience.
+
+=cut
+
+sub normalize_hash {
+    my($self, $hash) = @_;
+    my(@normal_cols, @cols);
+
+    @normal_cols = @cols = keys %$hash;
+    $self->normalize(\@normal_cols);
+    
+    assert(@normal_cols == @cols) if DEBUG;
+
+    @{$hash}{@normal_cols} = delete @{$hash}{@cols};
+
+    return SUCCESS;
+}
 
 =pod
 
@@ -831,111 +1109,37 @@ Ima::DBI's man page).
 In order to write new methods which are inheritable by your subclasses
 you must be careful not to hardcode any information about your class's
 table name or primary key.  However, it is more efficient to use
-Ima::DBI::set_sql() to generate cached statement handles.
+set_sql() to generate cached statement handles.
 
-This clash between inheritability and efficiency is solved by
-make_sql().  Through the magic of autoloading and closures make_sql()
-lets you write cached SQL statement handles while still allowing them
-to be inherited.
-
-=over 4
-
-=item B<make_sql>
-
-    $obj->make_sql($sql_name, \&sql_generator);
-    $obj->make_sql($sql_name, \&sql_generator, $db_name);
-
-make_sql() works almost like Ima::DBI::set_sql() with two important
-differences.  
-
-Instead of simply giving it an SQL statement you must instead feed it
-a subroutine which generates the necessary SQL statement.  This
-routine is called as a method and takes no arguments.
-
-Generally, a call to make_sql() looks something like this:
+Generally, a call to set_sql() looks something like this:
 
     # Define sql_GetFooBar()
-    Class->make_sql('GetFooBar',
-                    sub {
-                        my($class) = shift;
+    Class->set_sql('GetFooBar', <<'SQL');
+    SELECT %s
+    FROM   %s
+    WHERE  Foo = ? AND Bar = ?
 
-						my $sql = '';
-			$sql .= 'SELECT '. join(', ', $class->columns('Essential')  ."\n";
-			$sql .= 'FROM   '. $class->table                ."\n";
-			$sql .= 'WHERE  Foo = ? AND Bar = ?'
+This generates a method called sql_GetFooBar().  Any arguments given
+are used fill in your SQL statement via sprintf().
 
-						return $sql;
-					}
-				   );
+    my $sth = Class->sql_GetFooBar(join(', ', Class->columns('Essential')),
+                                   Class->table);
 
 You must be careful not to hardcode information about your class's
 table name or primary key column in your statement and instead use
 the table() and columns() methods instead.
-
-If you're creating an SQL statement that has no information about your
-class in it (usually because its operating on a different table than
-your class is stored in) then you may create your statement normally
-using the set_sql() method inherited from Ima::DBI.
 
 If $db_name is omitted it will assume you are using the 'Main'
 connection.
 
 =cut
 
-#'#
+# Override set_sql() so it has a default database connection.
+sub set_sql {
+    my($class, $name, $sql, $db) = @_;
+    $db = 'Main' unless defined $db;
 
-# XXX Override set_sql, add a hash of $sths{$class} = $sth.
-sub make_sql {
-    my($proto, $sql_name, $sql_gen, $db_name) = @_;
-    my($class) = ref $proto || $proto;
-
-    $db_name = 'Main' unless defined $db_name;
-	my $db_meth = $db_name;
-	$db_meth =~ s/\s/_/g;
-	$db_meth = "db_$db_meth";
-
-# Its entirely possible for a class to define a statement while
-# expecting its subclass to define the connection.
-#    $class->can($db_meth) or
-#	  die "There is no database connection named '$db_name' defined in $class";
-
-	# We now do basically what set_sql() does except we have one
-	# statement handle for each class.
-	my %class_sths = ();
-
-	my $sql_meth = $sql_name;
-	$sql_meth =~ s/\s/_/g;
-	$sql_meth = "sql_$sql_name";
-
-	no strict 'refs';
-	*{$class."::$sql_meth"} =
-	  sub {
-		  my $class = shift;
-		  my $sth = $class_sths{$class};
-
-		  my $dbh = $class->$db_meth();
-
-		  # Calling prepare_cached over and over again is expensive.
-		  # Again, we co-opt some of prepare_cached's functionality.
-		  if ( !$sth ) {	# No $sth defined yet.
-			  $sth = $dbh->prepare_cached($sql_gen->($class));
-			  $class_sths{$class} = $sth;
-			  bless $sth, 'Ima::DBI::st';
-		  }
-		  else {			# $sth defined.
-			  # Check to see if the handle is active.
-			  if( $sth->FETCH('Active') ) {
-				  require Carp;
-				  Carp::carp("'$sql_name' statement handle is still ".
-							 "active!  Finishing for you.");
-				  $sth->finish;
-			  }
-		  }
-
-		  return $sth;
-	  };
-			  
-    return SUCCESS;
+    $class->SUPER::set_sql($name, $sql, $db);
 }
 
 =pod
@@ -959,18 +1163,25 @@ whose $key has the given $value.
 
 =cut
 
+__PACKAGE__->set_sql('Search', <<"", 'Main');
+SELECT  %s 
+FROM    %s
+WHERE   %s = ?
+
+
 sub search {
     my($proto, $key, $value) = @_;
     my($class) = ref $proto || $proto;
 
+    $class->normalize_one(\$key);
+
+    assert($class->is_column($key)) if DEBUG;
+
     my $sth;
     eval {
-        my $dbh = $class->db_Main;
-		$sth = $dbh->prepare(<<"");
-		SELECT    ${\( join(', ', $class->columns('Essential')) )}
-        FROM      ${\( $class->table )}
-        WHERE     $key = ?
-
+        $sth = $class->sql_Search(join(', ', $class->columns('Essential')),
+                              $class->table,
+                              $key);
         $sth->execute($value);
     };
     if($@) {
@@ -991,36 +1202,33 @@ given.  $like_pattern is a pattern given in SQL LIKE predicate syntax.
 '%' means "any one or more characters", '_' means "any single
 character".
 
+XXX Should I offer glob-style * and ? instead of % and _?
+
     # Search for movies directed by guys named Bob.
     @films = Film->search_like('Director', 'Bob %');
 
 =cut
 
-__PACKAGE__->make_sql('SearchLike',
-                      sub {
-                          my($class) = @_;
+__PACKAGE__->set_sql('SearchLike', <<"", 'Main');
+SELECT    %s
+FROM      %s
+WHERE     %s LIKE ?
 
-                          # XXX Not sure if WHERE ? = ? is valid.
-                          return <<"";
-                   SELECT    ${\( join(', ', $class->columns('Essential')) )}
-                   FROM      ${\( $class->table )}
-                   WHERE     ? LIKE ?
-
-                      }
-                     );
 
 sub search_like {
     my($proto, $key, $pattern) = @_;
     my($class) = ref $proto || $proto;
 
+    $class->normalize_one(\$key);
+
+    assert($class->is_column($key)) if DEBUG;
+
     my $sth;
     eval {
-		my $dbh = $class->db_Main;
-        $sth = $dbh->prepare(<<"");
-		SELECT    ${\( join(', ', $class->columns('Essential')) )}
-        FROM      ${\( $class->table )}
-        WHERE     $key LIKE ?
-
+        $sth = $class->sql_SearchLike(join(', ', $class->columns('Essential')),
+                                      $class->table,
+                                      $key
+                                     );
         $sth->execute($pattern);
     };
     if($@) {
@@ -1034,6 +1242,13 @@ sub search_like {
 
 =pod
 
+=head1 EXAMPLES
+
+Ummm... well, there's the SYNOPSIS.
+
+XXX Need more examples.  They'll come.
+
+
 =head1 CAVEATS
 
 =head2 Only simple scalar values can be stored
@@ -1041,14 +1256,20 @@ sub search_like {
 SQL sucks in that lists are really complicated to store and hashes
 practically require a whole new table.  Don't even start about
 anything more complicated.  If you want to store a list you're going
-to have to write the accessors for it yourself.  If you want to store
-a hash you should probably consider making a new table and a new
-class.
+to have to write the accessors for it yourself (although I plan to
+prove ways to handle this soon).  If you want to store a hash you
+should probably consider making a new table and a new class.
+
+Someone might be able to convince me to build accessors which
+automagically serialize data.
 
 =head2 One table, one class
 
 For every class you define one table.  Classes cannot be spread over
 more than one table, this is too much of a headache to deal with.
+
+Eventually I'll ease this restriction for link tables and tables
+representing lists of data.
 
 =head2 Single column primary keys only
 
@@ -1056,38 +1277,37 @@ Having more than one column as your primary key in the SQL table is
 currently not supported.  Why?  Its more complicated.  A later version
 will support multi-column keys.
 
-=head2 Careful with the autoloaders!
+=head2 Table/object relationships need to be handled.
 
-Class::DBI employs an autoloader (inherited from Class::Accessor) so
-your subclass must be careful if you're defining your own autoloader.
-You must be sure to call Class::DBI's autoloader should your own not
-find a valid method.  For example:
+There's no graceful way to handle relationships between two
+tables/objects.  I plan to eventually support these relationships in a
+fairly simple manner.
 
-    sub AUTOLOAD {
-        my($self) = $_[0];
+=head2 Lists are poorly supported
 
-        my($func) = $AUTOLOAD =~ m/::([^:]+)$/;
-
-        ### Try to autoload $func ###
-
-        # If all else fails, pass the buck to Class::DBI.
-        *Class::DBI::AUTOLOAD = \$AUTOLOAD;
-        goto &Class::DBI::AUTOLOAD
-    }
-
-You must, of course, be careful not to modify @_ or $AUTOLOAD.
+There's no graceful way to handle lists of things as object data.
+This is also something I plan to implement eventually.
 
 
-=head2 Define new SQL statements through make_sql()
+=head1 BUGS
+
+=head2 Untested in production.
+
+I've yet to really throw this into a production environment and shake
+out the bugs.  I will be using it in that capacity soon and it will
+firm up quickly.
+
+=head2 Only tested with DBD::CSV and MySQL
 
 
 =head1 AUTHOR
 
 Michael G Schwern <schwern@pobox.com> with much late-night help from
-Uri Gutman
+Uri Gutman and Damian Conway.
+
 
 =head1 SEE ALSO
 
-L<Ima::DBI>, L<Class::Accessor>, L<public>, L<base>
+L<Ima::DBI>, L<Class::Accessor>, L<base>, L<Class::Data::Inheritable>
 
 =cut

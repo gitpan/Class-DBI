@@ -1,3 +1,5 @@
+# $Id: Makefile.PL,v 1.4 2000/04/15 05:38:49 schwern Exp $
+#
 # A template for Makefile.PL used by Arena Networks.
 # - Set the $PACKAGE variable to the name of your module.
 # - Set $LAST_API_CHANGE to reflect the last version you changed the API 
@@ -11,13 +13,11 @@ use ExtUtils::MakeMaker;
 
 $PACKAGE = 'Class::DBI';
 ($PACKAGE_FILE) = $PACKAGE =~ /::([^:]+)/;
-$LAST_API_CHANGE = 0;
+$LAST_API_CHANGE = 0.05;
 
 require 5.00502;
 
-eval {
-    eval "require $PACKAGE";
-};
+eval "require $PACKAGE";
 
 unless ($@) { # Make sure we did find the module.
     print <<"CHANGE_WARN" if ${$PACKAGE.'::VERSION'} < $LAST_API_CHANGE;
@@ -30,18 +30,18 @@ CHANGE_WARN
 }
 
 WriteMakefile(
-	NAME               	=> $PACKAGE,
-	VERSION_FROM      	=> 'lib/Class/DBI.pm',
-    PREREQ_PM          	=> {
-							Carp::Assert		=> 0.06,
-							Class::Accessor		=> 0.02,
-							Ima::DBI			=> 0.15,
-							public				=> 0.01,
-							base				=> 1.90,
-							protected			=> 0.01,
-						   },
-	'dist'      		=> { COMPRESS 	=> 'gzip -9',
-                             SUFFIX   	=> '.gz',
-                             DIST_DEFAULT 	=> 'all tardist',
+    NAME                => $PACKAGE,
+    VERSION_FROM        => 'lib/Class/DBI.pm',
+    PREREQ_PM           => {
+                            Carp::Assert        => 0.06,
+                            Class::Accessor     => '0.10',
+                            Class::Data::Inheritable => 0.02,
+                            Ima::DBI            => 0.18,
+                            base                => 1.90,
+                            protected           => 0.01,
+                           },
+    'dist'              => { COMPRESS   => 'gzip -9',
+                             SUFFIX     => '.gz',
+                             DIST_DEFAULT   => 'all tardist',
                            },
 );
