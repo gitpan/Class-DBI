@@ -1,7 +1,7 @@
 $|=1;
 use strict;
 use vars qw/$TESTS/;
-BEGIN { $TESTS = 13; }
+BEGIN { $TESTS = 14; }
 
 use Test::More tests => $TESTS;
 
@@ -29,5 +29,12 @@ my $bobble = MyFoo->retrieve($wobble->id);
 is($bobble->tdate, Date::Simple->new->format, " set OK in DB too");
 isa_ok $bobble->tdate, "Date::Simple";
 
+{
+	local $SIG{__WARN__} = sub {};
+	eval {
+		MyFoo->create({ myid => $baz->id, name => "uhoh", val => 10, tdate => 1 });
+	};
+	like $@, qr/Duplicate entry/, "Create error perpetuated";
+}
 
 }

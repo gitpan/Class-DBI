@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 24;
+use Test::More tests => 26;
 
 #-------------------------------------------------------------------------
 package State;
@@ -12,8 +12,15 @@ State->columns('Essential', qw/Abbreviation/);
 State->columns('Weather',   qw/Rain Snowfall/);
 State->columns('Other',     qw/Capital Population/);
 
+sub accessor_name { 
+  my ($class, $column) = @_;
+  my $return = $column eq "Rain" ? "Rainfall" : $column;
+  return $return;
+}
+
 sub mutator_name { 
   my ($class, $column) = @_;
+  my $return = $column eq "Rain" ? "set_Rainfall" : "set_$column";
   return "set_$column";
 }
 
@@ -29,7 +36,7 @@ CD->columns('All' => qw/artist title length/);
 package main;
 
 is (State->table, 'State', 'table()');
-is (State->primary, 'name', 'primary()');
+is (State->_primary, 'name', 'primary()');
 
 ok eq_set(
      [State->columns('Primary')],   [qw/name/]
@@ -42,7 +49,7 @@ ok eq_set(
      [qw/name abbreviation rain snowfall capital population/]
    ), 'All cols:'. join ", ", State->columns('All');
 
-is (CD->primary, 'artist', 'primary()');
+is (CD->_primary, 'artist', 'primary()');
 ok eq_set(
      [CD->columns('All')], [qw/artist title length/]
    ), 'All cols:'. join ", ", CD->columns('All');
@@ -62,9 +69,11 @@ ok( State->has_column('rain'),        'has_column rain');
 ok( !State->has_column('HGLAGAGlAG'), '!has_column HGLAGAGlAG');
 ok( State->is_column('capital'),      'is_column');
 
-ok( State->can('Rain'),               'accessor set up');
-ok( State->can('_Rain_accessor'),     ' with alias');
-ok( !State->can('rain'),              ' (not normalized)');
+ok( !State->can('Rain'),               'No Rain accessor set up');
+ok( State->can('Rainfall'),            'Rainfall accessor set up');
+ok( State->can('_Rainfall_accessor'),      ' with correct alias');
+ok( !State->can('_Rain_accessor'),      ' (not by colname)');
+ok( !State->can('rain'),               ' (not normalized)');
 ok( State->can('set_Rain'),           'overriden mutator');
 ok( State->can('_set_Rain_accessor'), ' with alias');
 

@@ -1,11 +1,16 @@
 use strict;
-use Test::More tests => 41;
+use Test::More tests => 46;
 
 $|=1;
 require './t/testlib/Film.pm';
 ok Film->CONSTRUCT, "Construct Film table";
 
 ok( Film->can('db_Main'), 'set_db()'  );
+
+{
+  my $nul = Film->retrieve();
+  is $nul, undef, "Can't retrieve nothing";
+}
 
 my $btaste = Film->retrieve('Bad Taste');
 isa_ok $btaste, 'Film';
@@ -106,6 +111,14 @@ is( $btaste->Director, $orig_director, 'rollback()'     );
     $br->NumExplodingSheep(10);
   }
   is(scalar @warnings, 1, "DESTROY without commit warns");
+}
+
+# Primary key of 0
+{ 
+	ok my $zero = Film->create({ Title => 0, Rating => "U" }), "Create 0";
+	ok my $ret = Film->retrieve(0), "Retrieve 0";
+	is $ret->Title, 0, "Title OK";
+	is $ret->Rating, "U", "Rating OK";
 }
 
 # Make sure that we can have other accessors. (Bugfix in 0.28)

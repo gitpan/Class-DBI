@@ -5,9 +5,11 @@ use base qw(Class::DBI);
 
 use vars qw/$dbh/;
 
-$dbh = DBI->connect('dbi:mysql:test') or die;
+my @connect = ("dbi:mysql:test", "", ""); 
 
-__PACKAGE__->set_db('Main', "dbi:mysql:test", '', '');
+$dbh = DBI->connect(@connect) or die DBI->errstr;
+
+__PACKAGE__->set_db('Main', @connect);
 
 sub set_table {
   my $class = shift;

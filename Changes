@@ -1,4 +1,36 @@
-0.86 Fri Mar  8 12:27:06 GMT 2002
+0.89 Mon Jun 24 2002
+    - allow has_many to not have a relationship 
+       (Thanks to Brian Parker)
+    - renamed (undocumented) min() and max() to 
+       minimum_value_of() and maximum_value_of()
+    - croak() and carp() deprecated in favour of _croak() and _carp()
+    - primary() and essential() deprecated in favour of 
+      _primary() and _essential()
+    - normalize_one() deprecated in favour of _normalize_one
+    - If a 'might-have' link points to nothing, don't give a 'Can't call
+      method' error
+    - better reporting on errors from create etc.
+    - better reporting when you incorrectly set through hasa()
+    - handle primary/foreign key value of zero better
+       (reported by Jim O'Brien)
+    - added (undocumented) 'column_type' based on ideas from
+      Matthew Simon Cavalletto and Tatsuhiko Miyagawa.
+    - brought delete triggers in line with documentation
+       (reported by Barry Hoggard, fixed by Tatsuhiko Miyagawa)
+
+0.88 Beltane 2000
+    - fix for hasa() and create() with modified accessor/mutator names
+      (Thanks to Schwern)
+
+0.87 Fri Mar 29 2002
+    * added might_have method
+    - better MySQL autoincrement code (fixes occassional problems
+       under mod_perl) [Thanks to Tatsuhiko Miyagawa]
+    - fixed a test that was failing on 5.005 (but not 5.6.1) due to weird 
+      interaction between overloaded iterator and Test::More's ok() 
+      prototype  [Thanks to Tatsuhiko Miyagawa]
+
+0.86 Fri Mar  8 GMT 2002
     * removed support for pseudo-hashes
     * hasa_list is now has_many 
       (although has_many still exists for backwards compatability)
@@ -14,34 +46,34 @@
     - deal better with the case where the only column group is 'All'
     - much internal twiddly stuff
 
-0.36  Wed Nov 28 12:28:22 GMT 2001
+0.36  Wed Nov 28 2001
     + tests no loner die horribly if you don't have MySQL installed
     - minor tweaks to some error messages
     - bugfixes for problems with auto-deleting objects
     - bugfix for mis-normalized accessor warning
        (thanks to Schwern)
 
-0.35  Sun Oct  7 19:54:11 BST 2001
+0.35  Sun Oct  7 2001
     + added hooks for create, update and delete
     - split commit() for easier subclassing
 
-0.34  Sat Oct  6 12:48:43 BST 2001
+0.34  Sat Oct  6 2001
     - Don't die if a value is a reference. (Ima::DBI does this for us,
        and better in case of overloaded objects)
     - fix minor problem with mutual hasa / hasa_list referencing
     - better diagnostics if hasa_list is miscalled
 
-0.33  Sat Sep 15 12:03:17 BST 2001
+0.33  Sat Sep 15 2001
     + Added create_filter(), and with it retrieve_all()
     + added docs on how to set-up many-to-many relationships
     + _cascade delete now split out to allow overriding
     + copy() and move() can now take multiple arguments to change
        (thanks to Jonathan Swartz)
 
-0.32  Sun Sep  9 19:27:38 BST 2001
+0.32  Sun Sep  9 2001
     + delete() now removes any foreign elements, to avoid orphans
 
-0.31  Sun Sep  9 00:41:37 BST 2001
+0.31  Sun Sep  9 2001
     + split out _column_placeholder (thanks to Jonathan Swartz)
     + added hasa() checks for orphaned rows
 

@@ -18,7 +18,9 @@ t/10-mysql.t
 t/11-triggers.t
 t/12-filter.t
 t/13-constraint.t
+t/14-might_have.t
 t/testlib/Actor.pm
+t/testlib/Blurb.pm
 t/testlib/CDBase.pm
 t/testlib/Director.pm
 t/testlib/Film.pm

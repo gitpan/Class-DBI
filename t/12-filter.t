@@ -29,7 +29,8 @@ my @act = (
 }
 
 { 
-  ok !Actor->salary_between(100, 200), "None in Range 100 - 200";
+  my @actors = Actor->salary_between(100, 200);
+  is @actors, 0, "None in Range 100 - 200";
 }
 
 { 

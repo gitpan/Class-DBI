@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 22;
+use Test::More tests => 25;
 
 BEGIN {
   require './t/testlib/Film.pm';
@@ -7,7 +7,7 @@ BEGIN {
   Film->CONSTRUCT;
   Actor->CONSTRUCT;
   Film->has_many(actors => Actor => 'Film', { sort => 'name' });
-  is(Actor->primary, 'name', "Actor primary OK");
+  is(Actor->_primary, 'name', "Actor primary OK");
 }
 
 ok(Actor->can('Salary'), "Actor table set-up OK");
@@ -17,10 +17,14 @@ ok( my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 
 ok(my $pvj = Actor->create({ 
   Name       => 'Peter Vere-Jones',
-  Film       => $btaste,
+  Film       => undef,
   Salary     => '30_000',  # For a voice!
 }), 'create Actor' );
 is $pvj->Name, "Peter Vere-Jones", "PVJ name ok";
+ok !$pvj->Film, "No film";
+ok $pvj->set_Film($btaste), "Set film"; 
+   $pvj->commit;
+is $pvj->Film->id, $btaste->id, "Now film";
 {
   my @actors = $btaste->actors;
   is(@actors, 1, "Bad taste has one actor");

@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 19;
+use Test::More tests => 21;
 @YA::Film::ISA = 'Film';
 
 BEGIN {
@@ -32,7 +32,17 @@ my $sj = Director->create({
 
 is( $sj->id, 'Skippy Jackson', 'We have a new director' );
 
+{
+	eval { $btaste->Director($btaste) };
+	like $@, qr/is not an object of type 'Director'/, "Need an object";
+}
+
 Film->hasa('Director' => 'CoDirector');
+{
+	eval { $btaste->CoDirector("Skippy Jackson") };
+	like $@, qr/is not an object of type 'Director'/, "Need an object";
+}
+
 $btaste->CoDirector($sj);
 $btaste->commit;
 is( $btaste->CoDirector->Name, 'Skippy Jackson', 'He co-directed' );

@@ -5,7 +5,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.86';
+$VERSION = '0.89';
 
 use Carp::Assert;
 use Class::DBI::Iterator;
@@ -14,10 +14,17 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 use protected qw(__Changed __AutoCommit);
 
-use constant SUCCESS => (1==1);
+sub _deprecated {
+	my $method = shift;
+	my @caller = caller(1);
+	warn "Use of '$method' is deprecated at $caller[1] line $caller[2]\n";
+}
 
-sub croak { require Carp; Carp::croak($_[1] || $_[0]) }
-sub carp  { require Carp; Carp::carp($_[1] || $_[0])  }
+sub croak { _deprecated("croak"); goto &_croak; }
+sub carp  { _deprecated("carp"); goto &_carp; }
+
+sub _croak { require Carp; Carp::croak($_[1] || $_[0]) }
+sub _carp  { require Carp; Carp::carp($_[1] || $_[0])  }
 
 #----------------------------------------------------------------------
 # SQL we'll need
@@ -41,9 +48,6 @@ __PACKAGE__->set_sql('DeleteMe', <<"");
 DELETE
 FROM   %s
 WHERE  %s = ?
-
-__PACKAGE__->set_sql('LastInsertID', <<'');
-SELECT LAST_INSERT_ID()
 
 __PACKAGE__->set_sql('Nextval', <<'');
 SELECT NEXTVAL ('%s')
@@ -72,7 +76,7 @@ SELECT NEXTVAL ('%s')
     my $default_attr = $Per_DB_Attr_Defaults{lc $driver} || {};
     $attr = { %$default_attr, %$attr };
 
-    carp("Your database name should be 'Main'") unless $db_name eq "Main";
+    _carp("Your database name should be 'Main'") unless $db_name eq "Main";
     $class->SUPER::set_db('Main', $data_source, $user, $password, $attr);
   }
 }
@@ -89,8 +93,8 @@ sub columns {
   my $group = shift || "All";
   return $class->_set_columns($group => @_) if @_;
   return $class->all_columns if $group eq "All";
-  return $class->primary     if $group eq "Primary";
-  return $class->essential   if $group eq "Essential";
+  return $class->_primary     if $group eq "Primary";
+  return $class->_essential   if $group eq "Essential";
   return @{$class->__columns->{$group} || []};
 }
 
@@ -121,18 +125,20 @@ sub all_columns {
   return $class->_unique_entries(map @{$groups{$_}}, keys %groups);
 }
 
-sub primary {
+sub primary  { _deprecated("primary"); goto &_primary; }
+sub _primary {
   my $class = shift;
   my $group = $class->__columns;
   if (my $col = $group->{Primary}) {
     return $col->[0];
   }
-  return ($class->columns(Primary => ($class->essential)[0]))[0];
+  return ($class->columns(Primary => ($class->_essential)[0]))[0];
 }
 
-sub id { my $self = shift; $self->get($self->primary) }
+sub id { my $self = shift; $self->get($self->_primary) }
 
-sub essential {
+sub essential  { _deprecated("essential"); goto &_essential; }
+sub _essential {
   my $class = shift;
   my $group = $class->__columns;
   if (my $col = $group->{Essential}) {
@@ -164,7 +170,7 @@ sub _cols2groups {
       $found{$group}++ if grep $_ eq $want, @{$groups{$group}};
     }
   }
-  croak "@cols not in any groups!" unless keys %found;
+  _croak "@cols not in any groups!" unless keys %found;
   return keys %found;
 }
 
@@ -237,7 +243,7 @@ sub autocommit {
     } else {
       $class->__AutoCommit($on_or_off);
     }
-    return SUCCESS;
+    return 1;
   } else {
     # Check for an explicit autocommit setting, first the object then
     # the class.
@@ -254,16 +260,39 @@ sub autocommit {
 #----------------------------------------------------------------------
 
 sub create {
+    my($class, $info) = @_;
+
+    my @cols = $class->columns('All');
+    my %colmap = ();
+
+    foreach my $col (@cols) {
+        my $mutator  = $class->mutator_name($col);
+        my $accessor = $class->accessor_name($col);
+        $colmap{$mutator}  = $col if $mutator  ne $col;
+        $colmap{$accessor} = $col if $accessor ne $col;
+    }
+
+    $class->normalize_hash($info);
+    foreach my $key (keys %$info) {
+        if (my $col = $colmap{$key}) { 
+            $info->{$col} = delete $info->{$key};
+        }
+    }
+
+    return $class->_create($info);
+}
+
+sub _create {
   my $proto = shift;
   my $class = ref $proto || $proto;
-  my $table = $class->table or croak "Can't create without a table";
+  my $table = $class->table or _croak "Can't create without a table";
   my $data  = shift;
-  croak 'data to create() must be a hashref' unless ref $data eq 'HASH';
+  _croak 'data to create() must be a hashref' unless ref $data eq 'HASH';
 
-  $class->has_column($_) or croak "$_ is not a column of $class" 
+  $class->has_column($_) or _croak "$_ is not a column of $class" 
     foreach keys %$data;
 
-  my $primary = $class->primary;
+  my $primary = $class->_primary;
   $data->{$primary} ||= $class->_next_in_sequence if $class->sequence;
 
   $class->normalize_hash($data);
@@ -275,7 +304,7 @@ sub create {
   }
 
   my $self = $class->_init;
-  $self->_insert_row($data) or croak "Can't insert row";
+  $self->_insert_row($data) or _croak "Can't insert row: $@";
   $self->{$primary} = $data->{$primary};
   $self->call_trigger('after_create');
   $self->call_trigger('create'); # For historic reasons...
@@ -297,12 +326,7 @@ sub _next_in_sequence {
   );
 }
 
-sub _auto_increment_value {
-  my $self = shift;
-  return $self->_find_primary_value(
-    $self->sql_LastInsertID
-  );
-}
+sub _auto_increment_value { shift->db_Main->{mysql_insertid} }
 
 sub _insert_row {
   my $self = shift;
@@ -315,7 +339,7 @@ sub _insert_row {
       join(', ', map $self->_column_placeholder($_), keys %$data),
     );
     $sth->execute(values %$data);
-    $data->{$self->primary} ||= $self->_auto_increment_value;
+    $data->{$self->_primary} ||= $self->_auto_increment_value;
   };
   if($@) {
     $self->DBIwarn("New $class", 'MakeNewObj');
@@ -328,11 +352,12 @@ sub new   { my $proto = shift; $proto->create(@_); }
 sub _init { my $class = shift; bless { __Changed => {} }, $class; }
 
 sub retrieve {
-  my $class = shift;
-  my $id = shift or return;
-  croak "Cannot retrieve a reference" if ref($id);
-  my @rows = $class->search($class->primary => $id);
-  return $rows[0];
+	my $class = shift;
+	my $id = shift;
+  return unless defined $id;
+	_croak "Cannot retrieve a reference" if ref($id);
+	my @rows = $class->search($class->_primary => $id);
+	return $rows[0];
 }
 
 # Get the data, as a hash, but setting certain values to whatever
@@ -343,10 +368,10 @@ sub _data_hash {
   my $self     = shift;
   my @columns  = $self->columns;
   my %data; @data{@columns} = $self->get(@columns);
-  delete $data{$self->primary};
+  delete $data{$self->_primary};
   if (@_) {
     my $arg = shift;
-    my %arg = ref($arg) ? %$arg : ( $self->primary => $arg );
+    my %arg = ref($arg) ? %$arg : ( $self->_primary => $arg );
     @data{keys %arg} = values %arg;
   }
   return \%data;
@@ -364,7 +389,7 @@ sub copy {
 sub construct {
   my ($proto, $data) = @_;
   my $class = ref $proto || $proto;
-  croak("construct() is a protected method of Class::DBI")
+  _croak("construct() is a protected method of Class::DBI")
     unless caller->isa("Class::DBI");
 
   my @wantcols = $class->_normalized(keys %$data);
@@ -377,14 +402,15 @@ sub construct {
 sub move {
   my $class = shift;
   my $old_obj = shift;
-  croak "You can only move to a related class"
+  _croak "You can only move to a related class"
     unless $class->isa(ref $old_obj) or $old_obj->isa($class);
   return $class->create($old_obj->_data_hash(@_));
 }
 
 sub delete {
   my $self = shift;
-  $self->call_trigger('delete');
+  $self->call_trigger('before_delete');
+  $self->call_trigger('delete'); # For historic reasons...
   $self->_cascade_delete;
   eval {
     my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
@@ -394,9 +420,10 @@ sub delete {
     $self->DBIwarn($self->id, 'Delete');
     return;
   }
+  $self->call_trigger('after_delete');
   undef %$self;
   bless $self, 'Class::Deleted';
-  return SUCCESS;
+  return 1;
 }
 
 sub _cascade_delete {
@@ -435,17 +462,17 @@ sub _column_placeholder { '?' }
 
 sub commit {
   my $self = shift;
-  my $class = ref($self);
-  my $table = $self->table or croak "You don't have a table";
+  my $class = ref($self) or _croak "commit() called as class method";
+  my $table = $self->table or _croak "You don't have a table";
 
   $self->call_trigger('before_update');
   if (my @changed_cols = $self->is_changed) {
-    my $sth = $self->sql_commit($table, $self->_commit_line, $self->primary);
+    my $sth = $self->sql_commit($table, $self->_commit_line, $self->_primary);
     eval {
       $sth->execute($self->_commit_vals, $self->id);
     };
     if ($@) {
-      $self->DBIwarn("Cannot commit $table");
+      $self->DBIwarn("Cannot commit $table: $@");
       return;
     }
     $self->{__Changed}  = {};
@@ -454,7 +481,7 @@ sub commit {
     $self->_flesh('All');
   }
   $self->call_trigger('after_update');
-  return SUCCESS;
+  return 1;
 }
 
 sub _commit_line {
@@ -470,7 +497,7 @@ sub _commit_vals {
 sub DESTROY {
     my($self) = shift;
     if( my @changes = $self->is_changed ) {
-        carp ($self->id .' in class '. ref($self) .
+        _carp ($self->id .' in class '. ref($self) .
       ' destroyed without saving changes to column(s) '.
       join(', ', map { "'$_'" } @changes) . "."
     );
@@ -480,10 +507,10 @@ sub DESTROY {
 sub rollback {
   my $self = shift;
   my $class = ref $self;
-  croak 'rollback() used while autocommit is on' if $self->autocommit;
+  _croak 'rollback() used while autocommit is on' if $self->autocommit;
   delete $self->{$_} foreach $self->is_changed;
   $self->{__Changed} = {};
-  return SUCCESS;
+  return 1;
 }
 
 # We override the get() method from Class::Accessor to fetch the data for
@@ -493,7 +520,7 @@ sub rollback {
 
 sub get {
   my($self, @keys) = @_;
-  croak "Can't get() nothing!" unless @keys;
+  _croak "Can't get() nothing!" unless @keys;
 
   if (my @fetch_cols = grep !exists $self->{$_}, @keys) {
     $self->_flesh($self->_cols2groups(@fetch_cols));
@@ -507,13 +534,13 @@ sub _flesh {
   my ($self, @groups) = @_;
   my @want = grep !exists $self->{$_}, $self->_groups2cols(@groups);
   if (@want) {
-    my $sth = $self->_run_query('Flesh', $self->primary, $self->id, \@want);
+    my $sth = $self->_run_query('Flesh', $self->_primary, $self->id, \@want);
     my @row = $sth->fetchrow_array;
     $sth->finish;
     @{$self}{@want} = @row;
     $self->call_trigger('select');
   }
-  return SUCCESS;
+  return 1;
 }
 
 # We also override set() from Class::Accessor so we can keep track of
@@ -529,7 +556,7 @@ sub set {
   # someone to know how many times a value has changed between commits.
   $self->{__Changed}{$key}++ if $class->has_column($key);
   $self->commit if $class->autocommit;
-  return SUCCESS;
+  return 1;
 }
 
 sub is_changed { keys %{shift->{__Changed}} }
@@ -552,18 +579,17 @@ sub dbi_rollback { my $proto = shift; $proto->SUPER::rollback(@_); }
 #----------------------------------------------------------------------
 # Constraints
 #----------------------------------------------------------------------
-
 sub add_constraint {
   my $class = shift;
   $class->_invalid_object_method('add_constraint()') if ref $class;
-  my $name = shift or $class->croak("Constraint needs a name");
-  my $column = shift or $class->croak("Constraint needs a column");
+  my $name = shift or $class->_croak("Constraint needs a name");
+  my $column = shift or $class->_croak("Constraint needs a column");
   $class->has_column($column) 
-    or $class->croak("$column is not a column of $class");
+    or $class->_croak("$column is not a column of $class");
   my $code = shift 
-    or $class->croak("Constraint needs a code reference to execute");
+    or $class->_croak("Constraint needs a code reference to execute");
   ref($code) eq "CODE"
-    or $class->croak("$code is not a code reference");
+    or $class->_croak("$code is not a code reference");
   my $constraint = sub {
     my $self = shift;
     my $value = $self->$column();
@@ -575,6 +601,30 @@ sub add_constraint {
     on_setting    => $constraint,
   );
 }
+
+#----------------------------------------------------------------------
+# Inflation
+#----------------------------------------------------------------------
+sub _inflate_to_object {
+	my ($name, $class) = @_;
+	return sub {
+		my $self = shift;
+		return if not exists $self->{$name} or ref $self->{$name};
+		$self->{$name} = $class->new($self->{$name});
+	}
+}
+
+sub column_type {
+	my $class = shift;
+	$class->_invalid_object_method('column_type()') if ref $class;
+	my $column = shift;
+	$class->has_column($column)
+		or $class->_croak("$column is not a column of $class");
+	my $type = shift or $class->_croak("$column needs a column_type");
+	$class->_load_class($type);
+ 	$class->add_trigger(select => _inflate_to_object($column => $type));
+}
+
 
 #----------------------------------------------------------------------
 # FILTERS
@@ -589,8 +639,8 @@ __PACKAGE__->make_filter(between => '%s >= ? AND %s <= ?');
 sub make_filter {
   my $class = shift;
   $class->_invalid_object_method('make_filter()') if ref $class;
-  my $method = shift or croak("make_filter() needs a method name");
-  defined &{"$class\::$method"} and return carp("$method() already exists");
+  my $method = shift or _croak("make_filter() needs a method name");
+  defined &{"$class\::$method"} and return _carp("$method() already exists");
 
   # Create the query
   my $fragment = shift;
@@ -614,7 +664,7 @@ sub _run_filter {
   my (@cols, @vals);
   while (my ($col, $val) = splice @args, 0, 2) {
     $col = $class->_normalized($col);
-    croak "$col is not a column of $class" unless $class->has_column($col);
+    _croak "$col is not a column of $class" unless $class->has_column($col);
     push @cols, $col;
     push @vals, $val if defined $val;
   }
@@ -671,7 +721,7 @@ sub _run_query {
 
   my @ret_cols = $col
      ? ref $col ? @$col : ($col)
-     : $class->essential;
+     : $class->_essential;
 
   my $sql_method = "sql_$type";
   my $cols = join ", ", @ret_cols;
@@ -682,7 +732,7 @@ sub _run_query {
     $sth->execute(@sel_vals);
   };
   if($@) {
-    $class->DBIwarn($class => $type);
+    $class->DBIwarn("$type in $class" => $sth->{Statement});
     return;
   }
   return $sth;
@@ -702,12 +752,14 @@ sub count_all {
   $class->_single_value_select('COUNT(*)');
 }
 
-sub max {
+sub max  { _deprecated("max"); goto &maximum_value_of; }
+sub maximum_value_of {
   my ($class, $col) = @_;
   $class->_single_value_select("MAX($col)")
 }
 
-sub min {
+sub min  { _deprecated("min"); goto &minimum_value_of; }
+sub minimum_value_of {
   my ($class, $col) = @_;
   $class->_single_value_select("MIN($col)")
 }
@@ -744,12 +796,13 @@ sub _normalized {
 
 sub normalize {
   my($self, $colref) = @_;
-  croak "Normalize needs a listref" unless ref $colref eq 'ARRAY';
+  _croak "Normalize needs a listref" unless ref $colref eq 'ARRAY';
   $_ = $self->_normalized($_) foreach @$colref;
   return 1;
 }
 
-sub normalize_one {
+sub normalize_one  { _deprecated("normalize_one"); goto &_normalize_one; }
+sub _normalize_one {
   my ($self, $col) = @_;
   $$col = $self->_normalized($$col);
 }
@@ -765,7 +818,7 @@ sub normalize_hash {
 
     @{$hash}{@normal_cols} = delete @{$hash}{@cols};
 
-    return SUCCESS;
+    return 1;
 }
 
 sub _unique_entries {
@@ -775,7 +828,7 @@ sub _unique_entries {
 
 sub _invalid_object_method {
   my ($self, $method) = @_;
-  carp "$method should be called as a class method not an object method";
+  _carp "$method should be called as a class method not an object method";
 }
 
 #----------------------------------------------------------------------
@@ -786,50 +839,64 @@ __PACKAGE__->mk_classdata('__hasa_columns');
 __PACKAGE__->mk_classdata('__hasa_list');
 
 sub hasa {
-  my ($class, $foreign_class, @foreign_key_cols) = @_;
+	my ($class, $f_class, $f_col) = @_;
+	$class->_load_class($f_class);
 
-  my $foreign_col_accessor = "_".$foreign_key_cols[0]."_accessor";
+	# Store the relationship
+	my $hasa_columns = $class->__hasa_columns || {};
+	   $hasa_columns->{$f_col} = $f_class;
+	$class->__hasa_columns($hasa_columns);
 
-  $class->_load_class($foreign_class);
+	my $obj_key = "__${f_class}_${f_col}_Obj";
+	$class->columns($obj_key, $f_col);
 
-  # This is so complicated to allow multiple columns leading to the
-  # same class.
-  my $obj_key = "__".$foreign_class."_".
-       join(':', @foreign_key_cols)."_Obj";
+	my $method = {
+		ro => $class->accessor_name($f_col),
+		wo => $class->mutator_name($f_col),
+	};
 
-  # Setup the columns for this foreign class.
-  $class->columns($obj_key, @foreign_key_cols);
+	{
+		my $for_acc = "_" . $method->{ro} . "_accessor";
+		my $for_mut = "_" . $method->{wo} . "_accessor";
+		my $mutator = sub {
+			my $self = shift;
+			my $obj = shift;
+			$self->_croak("'$obj' is not an object of type '$f_class'") 
+			  unless ref $obj eq $f_class;
+			$self->{$obj_key} = $obj;
+			$self->$for_mut($obj->id);
+		};
 
-  # Break this out somewhere
-  my $hasa_columns = $class->__hasa_columns || {};
-  @{$hasa_columns}{@foreign_key_cols} =
-    ($foreign_class) x @foreign_key_cols;
-  $class->__hasa_columns($hasa_columns);
+		my $accessor = sub {
+			my $self = shift;
+			die "Can't set via $method->{ro}" if @_;
+			if (not defined $self->{$obj_key}) {
+				my $obj_id = $self->$for_acc() or return;
+				$self->{$obj_key} = $f_class->retrieve($obj_id) or
+					$self->_croak("Can't retrieve $f_class ($obj_id)");
+			}
+			return $self->{$obj_key};
+		};
 
-  my $accessor = sub {
-    my($self) = shift;
+		my $common = sub {
+			my $self = shift;
+			$mutator->($self, @_) if @_;
+			return $accessor->($self);
+		};
 
-    if (@_) {             # setting
-      my $obj = shift;
-      $self->{$obj_key} = $obj;
-      $self->$foreign_col_accessor($obj->id);
-    }
+		{
+			local $SIG{__WARN__} = sub {};
+			no strict 'refs';
 
-    if ( not defined $self->{$obj_key} ) {
-      my $obj_id = $self->$foreign_col_accessor();
-      $self->{$obj_key} = $foreign_class->retrieve($obj_id) or
-        $self->croak("Can't retrieve $foreign_class ($obj_id)");
-    }
-
-    return $self->{$obj_key};
-  };
-
-  # This might cause a subroutine redefined warning.
-  {
-    local $SIG{__WARN__} = sub {};
-    no strict 'refs';
-    *{"$class\::$foreign_key_cols[0]"} = $accessor;
-  }
+			if ($for_acc eq $for_mut) {
+				*{"$class\::$method->{ro}"} = $common;
+			} else {
+				*{"$class\::$method->{ro}"} = $accessor;
+				*{"$class\::$method->{wo}"} = $mutator;
+			}
+		}
+	} 
+	return 1;
 }
 
 sub _tidy_creation_data {
@@ -840,7 +907,7 @@ sub _tidy_creation_data {
     next unless exists $data->{$col} and ref $data->{$col};
     my $want_class = $hasa_cols->{$col};
     my $obj = $data->{$col};
-    $class->croak("$obj is not a $want_class")
+    $class->_croak("$obj is not a $want_class")
       unless $obj->isa($want_class);
     $data->{$col} = $obj->id;
   }
@@ -859,15 +926,15 @@ sub hasa_list {
 
 sub has_many {
   my $class = shift;
-  my $accessor = shift or $class->croak("has_many needs an accessor name");
+  my $accessor = shift or $class->_croak("has_many needs an accessor name");
   $class->can($accessor) 
-    and return $class->carp("$accessor method already exists in $class\n");
-  my $foreign_class = shift or $class->croak("has_many needs a foreign class");
+    and return $class->_carp("$accessor method already exists in $class\n");
+  my $foreign_class = shift or $class->_croak("has_many needs a foreign class");
   $class->_load_class($foreign_class);
   
-  my $foreign_key = shift or $class->croak("has_many needs a foreign key");
+  my $foreign_key = shift or $class->_croak("has_many needs a foreign key");
   if (ref($foreign_key) eq "ARRAY") {
-    $class->croak("Multiple foreign keys not yet implemented")
+    $class->_croak("Multiple foreign keys not yet implemented")
       if @$foreign_key > 1;
     $foreign_key = $foreign_key->[0];
   }
@@ -882,7 +949,7 @@ sub has_many {
     no strict 'refs';
     *{"$class\::$accessor"} = sub {
       my $self = shift;
-      $self->croak("$accessor is read-only") if @_;
+      $self->_croak("$accessor is read-only") if @_;
       return defined $args->{sort} 
         ? $foreign_class->ordered_search(
             $foreign_key => $self->id, 
@@ -898,6 +965,29 @@ sub _extend_hasa_list {
   $class->_extend_class_data(__hasa_list => @_)
 }
 
+#----------------------------------------------------------------------
+# might have
+#----------------------------------------------------------------------
+
+# Video->might_have(plot => Videolog::Plot => (import methods));
+
+sub might_have {
+	my ($class, $method, $foreign_class, @methods) = @_;
+	$class->_load_class($foreign_class);
+	$class->add_trigger(before_update => sub { shift->$method()->commit });
+	no strict 'refs';
+	*{"$class\::$method"} = sub {
+		my $self = shift;
+		$self->{"_${method}_object"} ||= $foreign_class->retrieve($self->id);
+	};
+	foreach my $meth (@methods) {
+		*{"$class\::$meth"} = sub {
+			my $self = shift;
+			my $for_obj = $self->$method() or return;
+			$for_obj->$meth(@_);
+		};
+	}
+}
 
 #----------------------------------------------------------------------
 # misc stuff
@@ -913,7 +1003,7 @@ sub _load_class {
     # Other fatal errors (syntax etc) must be reported.
     die if $@ && $@ !~ /^Can't locate .*? at \(eval /; #';
     unless (%{"$foreign_class\::"}) {
-      $self->croak("Foreign class package \"$foreign_class\" is empty.\n",
+      $self->_croak("Foreign class package \"$foreign_class\" is empty.\n",
             "\t(Perhaps you need to 'use' the module ",
             "which defines that package first.)");
       }
@@ -954,6 +1044,7 @@ __END__
   CD->table('cd');
   CD->columns(All => qw/cdid artist title year/);
   CD->has_many('tracks', 'Track' => 'cd', { sort => 'position' });
+  CD->might_have(liner_notes => LinerNotes => qw/notes/);
 
   package Track;
   use base 'Music::DBI';
@@ -1303,8 +1394,8 @@ autoincrement is used), or a hashref of multiple new values.
 
 =head1 TRIGGERS
 
-  __PACKAGE__->add_trigger(before_create => \&call_after_create);
-  __PACKAGE__->add_trigger(after_create  => \&call_before_create);
+  __PACKAGE__->add_trigger(before_create => \&call_before_create);
+  __PACKAGE__->add_trigger(after_create  => \&call_after_create);
 
   __PACKAGE__->add_trigger(before_delete => \&call_before_delete);
   __PACKAGE__->add_trigger(after_delete  => \&call_after_delete);
@@ -1483,7 +1574,8 @@ $obj->get($self->columns('Primary'));
 Databases are all about relationships. And thus Class::DBI needs a way
 for you to set up descriptions of your relationhips.
 
-Currently we provide two such methods: 'hasa', and 'has_many':
+Currently we provide three such methods: 'hasa', 'has_many', and
+'might_have'.
 
 =head2 hasa
 
@@ -1510,7 +1602,7 @@ method.
 
 This also declares the reciprocal 'hasa' relationship on CD::Track->cd.
 
-=head2 Ordering
+=head3 Ordering
 
   CD->has_many('tracks', 'Track' => 'cd', { sort => 'playorder' });
 
@@ -1518,12 +1610,42 @@ Often you wish to order the values returned from has_many. This can be
 done by passing a hash ref containing a 'sort' value of the column by
 wish you want to order.
 
+=head2 might_have
+
+  CD->might_have(method_name => Class => (@fields_to_import));
+
+  CD->might_have(liner_notes => LinerNotes => qw/notes/);
+
+  my $liner_notes_object = $cd->liner_notes;
+  my $notes = $cd->notes; # equivalent to $cd->liner_notes->notes;
+
+might_have() is similar to has_many() for relationships that can have
+at most one associated objects. For example, if you have a CD database
+to which you want to add liner notes information, you might not want
+to add a 'liner_notes' column to your main CD table even though there
+is no multiplicity of relationship involved (each CD has at most one
+'liner notes' field). So, we create another table with the same primary
+key as this one, with which we can cross-reference.
+
+But you don't want to have to keep writing methods to turn the the
+'list' of liner_notes objects you'd get back from has_many into the
+single object you'd need. So, might_have() does this work for you. It
+creates you an accessor to fetch the single object back if it exists,
+and it also allows you import any of its methods into your namespace. So,
+in the example above, the LinerNotes class can be mostly invisible -
+you can just call $cd->notes and it will call the notes method on the
+correct LinerNotes object transparently for you.
+
+Making sure you don't have namespace clashes is up to you, as is correctly
+creating the objects, but I may make these simpler in later versions.
+(Particularly if someone asks for them!)
+
 =head2 Notes
 
-hasa() and has_many() will try to require the relevant foreign class
-for you.  If the require fails, it will assume it's not a simple require
-(ie. Foreign::Class isn't in Foreign/Class.pm) and that you've already
-taken care of it and ignore the warning.
+hasa(), might_have() and has_many() will try to require the relevant
+foreign class for you.  If the require fails, it will assume it's not a
+simple require (ie. Foreign::Class isn't in Foreign/Class.pm) and that
+you've already taken care of it and ignore the warning.
 
 NOTE: The two classes in a relationship do not have to be in the same
 database, on the same machine, or even in the same type of database! It
@@ -1612,8 +1734,8 @@ If you don't like this behavior, then just add all your columns to the
   my @all_columns  = $class->columns;
   my @columns      = $class->columns($group);
 
-  my $primary = $class->primary;
-  my @essential = $class->essential;
+  my $primary      = $class->_primary;
+  my @essential    = $class->_essential;
 
 There are three 'reserved' groups.  'All', 'Essential' and 'Primary'.
 
@@ -1633,8 +1755,8 @@ automatically be set to B<'All'> if you don't set it yourself.
 The 'Primary' column is always part of your 'Essential' group and
 Class::DBI will put it there if you don't.
 
-For simplicity we provide 'primary' and 'essential' methods which
-return these.
+For simplicity we provide private '_primary' and '_essential' methods
+which return these.
 
 =head2 has_column
 
