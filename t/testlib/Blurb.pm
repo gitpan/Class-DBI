@@ -22,7 +22,7 @@ sub create_blurbs_table {
 		qq{
      CREATE TABLE Blurbs (
         title                   VARCHAR(255) PRIMARY KEY,
-        blurb                   VARCHAR(255)
+        blurb                   VARCHAR(255) NOT NULL
     )
   }
 	);

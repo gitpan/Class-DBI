@@ -13,6 +13,7 @@ State->columns('Primary',   'Name');
 State->columns('Essential', qw/Abbreviation/);
 State->columns('Weather',   qw/Rain Snowfall/);
 State->columns('Other',     qw/Capital Population/);
+State->has_many(cities => "City");
 
 sub accessor_name {
 	my ($class, $column) = @_;
@@ -27,6 +28,16 @@ sub mutator_name {
 }
 
 sub Snowfall { 1 }
+
+
+package City;
+
+use base 'Class::DBI';
+
+City->table('City');
+City->columns(All => qw/Name State Population/);
+City->has_a(State => 'State');
+
 
 #-------------------------------------------------------------------------
 package CD;

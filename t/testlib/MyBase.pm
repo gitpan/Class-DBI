@@ -12,7 +12,7 @@ my @table;
 
 END { $dbh->do("DROP TABLE $_") foreach @table }
 
-__PACKAGE__->set_db('Main', @connect);
+__PACKAGE__->connection(@connect);
 
 sub set_table {
 	my $class = shift;

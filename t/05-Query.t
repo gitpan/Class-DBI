@@ -10,7 +10,7 @@ BEGIN {
 	use Actor;
 	Film->CONSTRUCT;
 	Actor->CONSTRUCT;
-	Film->has_many(actors => Actor => { sort => 'name' });
+	Film->has_many(actors => Actor => { order_by => 'name' });
 	Actor->has_a(Film => 'Film');
 }
 
@@ -26,6 +26,7 @@ my $act5 = Actor->create({ name => 'Pete', film => $film1, salary => 1 });
 my $act6 = Actor->create({ name => 'Pete', film => $film3, salary => 1 });
 
 use Class::DBI::Query;
+$SIG{__WARN__} = sub {};
 
 {
 	my @actors = eval {

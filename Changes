@@ -1,6 +1,52 @@
+0.96
+
+  New Functionality
+    - Maintain live object index so subsequent requests for same row return 
+      the same object (Perrin Harkins)
+    - connection() is now preferred over set_db()
+    - New relationship architecture (see Class::DBI::Relationship)
+    - meta_info now returns more information about relationships 
+    - search($column => undef) now does an ISNULL search (Bart Lateur,
+      Drew Wilson, William McKee)
+    - A slice of an iterator in scalar context now gives another
+      iterator (Thomas Klausner)
+    - Attribute methods can now take slices (Charles Bailey)
+    - pass $self to inflation/deflation methods, allowing (amongst other
+      things, cross-column processing in a custom method) (Charles Bailey)
+    - deflation now happens at distinct trigger points that happen after
+      normal before_create/update triggers (Dave Cash)
+    - Columns may now set their placeholders:
+        Foo->find_column('tdate')->placeholder("IF(1, CURDATE(), ?)");
+    - Columns know if they have been constrained
+
+  Documentation
+    - add note about needing a RootClass (and fix tests for this)
+    - Explain interaction of is_changed and auto-update (William McKee)
+    - Better examples for select_val and sql_single (Paul Makepeace)
+    - Add note about sprintf interpolation and wildcard searches in
+      home-grown queries (Christopher L. Everett)
+    - Mention the wiki
+
+  Bug Fixes
+    - Better error reporting from failed inflations [Tatsuhiko Miyagawa]
+    - You can now have a column named 'first' [Tatsuhiko Miyagawa]
+    - inflation and deflation handle edge cases better [Charles Bailey]
+    - search_ methods are only generated for SELECT calls
+    - add_constructor is now propery subclassable (Thomas Klausner)
+
+  Deprecations
+    - Class::DBI::Query is now deprecated. The SQL substitutions are a
+      much better approach.
+    - sort argument to has_many is now order_by to match search
+    - __hasa_rels and __hasa_list are deprecated in favour of meta_info
+
+  Other
+    - construct() is no longer a protected method. 
+    - skip t/17 on error. There's a bug here I can't find, or fix, yet.
+
 0.95 Fri Jan  9 2004
 
-	Pre-Requisites
+  Pre-Requisites
     - Now requires Perl 5.6 or greater
 
   New Functionality

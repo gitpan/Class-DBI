@@ -67,7 +67,7 @@ WriteMakefile(
 		'Class::Data::Inheritable' => '0.02',
 		'Class::Trigger'           => '0.07',
 		'File::Temp'               => '0.12',
-		'Ima::DBI'                 => '0.30',
+		'Ima::DBI'                 => '0.33',
 		'List::Util'               => '1.00',
 		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',

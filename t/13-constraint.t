@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 21);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 23);
 }
 
 INIT {
@@ -65,6 +65,8 @@ ok $fred, "Got fred";
 	like $@, qr/fails.*constraint/, "Fails listref constraint";
 	my $ok = eval { Film->create({ Rating => 'U' }) };
 	is $@, '', "Can create with rating U";
+	ok +Film->find_column('rating')->is_constrained, "Rating is constrained";
+	ok +Film->find_column('director')->is_constrained, "Director is not";
 }
 
 {

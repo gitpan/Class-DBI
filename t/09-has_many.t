@@ -10,9 +10,9 @@ BEGIN {
 	use Actor;
 	Film->CONSTRUCT;
 	Actor->CONSTRUCT;
-	Film->has_many(actors => Actor => 'Film', { sort => 'name' });
+	Film->has_many(actors => Actor => 'Film', { order_by => 'name' });
 	Actor->has_a(Film => 'Film');
-	is(Actor->primary_column, 'name', "Actor primary OK");
+	is(Actor->primary_column, 'id', "Actor primary OK");
 }
 
 ok(Actor->can('Salary'), "Actor table set-up OK");

@@ -8,7 +8,7 @@ use File::Temp qw/tempdir/;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 28);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 27);
 }
 
 use File::Temp qw/tempfile/;
@@ -23,15 +23,6 @@ use base 'Class::DBI';
 
 sub wibble { shift->croak("Croak dies") }
 
-{    # setting DB name to not-Main causes warning:
-	my $did_warn = 0;
-	local $SIG{__WARN__} = sub { $did_warn++ if shift =~ /named.*Main/ };
-	Holiday->set_db(Foo => @DSN);
-	::is $did_warn, 1, "DB connection must be named Main";
-	my $dbh = Holiday->db_Main;
-	::ok $dbh->{AutoCommit}, "AutoCommit turned on";
-}
-
 {
 	my $warning;
 	local $SIG{__WARN__} = sub {
@@ -41,8 +32,15 @@ sub wibble { shift->croak("Croak dies") }
 	local *UNIVERSAL::wonka = sub { };
 	Holiday->columns(TEMP => 'wonka');
 	::like $warning, qr/wonka.*clashes/, "Column clash warning for inherited";
+	undef $warning;
+
 	Holiday->columns(Primary => 'new');
 	::like $warning, qr/new.*clashes/, "Column clash warning with CDBI";
+	undef $warning;
+
+	Holiday->add_constructor('by_train');
+	Holiday::Camp->add_constructor('by_train');
+	::is $warning, undef, "subclassed constructor";
 }
 
 {
@@ -118,9 +116,6 @@ like $@, qr/retrieve a reference/, "Can't retrieve a reference";
 eval { my $foo = Holiday->create(id => 10) };
 like $@, qr/a hashref/, "Can't create without hashref";
 
-eval { my $foo = Holiday->construct({ id => 1 }); };
-like $@, qr/protected method/, "Can't call construct";
-
 {
 	my $foo = bless {}, 'Holiday';
 	local $SIG{__WARN__} = sub { die $_[0] };
@@ -144,4 +139,6 @@ like $@, qr/not a column/, "Can't create with nonsense column";
 eval { Film->_require_class('Class::DBI::__::Nonsense') };
 like $@, qr/Can't locate/, "Can't require nonsense class";
 
+eval { Holiday->search_DeleteMe };
+like $@, qr/locate.*DeleteMe/, $@;
 

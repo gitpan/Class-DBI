@@ -21,7 +21,7 @@ INIT {
 	isa_ok $btaste, 'Film', "We have Bad Taste";
 	{
 		no warnings 'redefine';
-		local *Ima::DBI::st::execute = sub { die "Database died" };
+		local *DBIx::ContextualFetch::st::execute = sub { die "Database died" };
 		eval { $btaste->delete };
 		::like $@, qr/delete.*Database died/s, "We failed";
 	}
@@ -35,7 +35,7 @@ INIT {
 	$btaste->numexplodingsheep(10);
 	{
 		no warnings 'redefine';
-		local *Ima::DBI::st::execute = sub { die "Database died" };
+		local *DBIx::ContextualFetch::st::execute = sub { die "Database died" };
 		eval { $btaste->update };
 		::like $@, qr/update.*Database died/s, "We failed";
 	}
@@ -49,9 +49,10 @@ if (0) {
 	my $sheep = Film->maximum_value_of('numexplodingsheep');
 	is $sheep, 1, "1 exploding sheep";
 	{
-		local *Ima::DBI::st::execute = sub { die "Database died" };
+		local *DBIx::ContextualFetch::st::execute = sub { die "Database died" };
 		my $sheep = eval { Film->maximum_value_of('numexplodingsheep') };
-		::like $@, qr/select.*Database died/s, "Handle database death in single value select";
+		::like $@, qr/select.*Database died/s,
+			"Handle database death in single value select";
 	}
 }
 

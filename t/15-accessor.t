@@ -137,7 +137,7 @@ eval {
 		my $film = Film->create({ Title => "Veronique", nonpersistent => 42 });
 		is $film->title,         "Veronique", "Title set OK";
 		is $film->nonpersistent, 42,          "As is non persistent value";
-
+		$film->remove_from_object_index;
 		ok $film = Film->retrieve('Veronique'), "Re-retrieve film";
 		is $film->title, "Veronique", "Title still OK";
 		is $film->nonpersistent, undef, "Non persistent value gone";
@@ -156,7 +156,7 @@ eval {
 	);
 	ok(Actor->find_column('nonpersistent'), "nonpersistent is a column");
 	ok(!Actor->has_real_column('nonpersistent'), " - but it's not real");
-	my $pj = eval { Actor->retrieve("Peter Jackson") };
+	my $pj = eval { Actor->search(name => "Peter Jackson")->first };
 	is $@, '', "no problems retrieving actors";
 	isa_ok $pj => "Actor";
 }

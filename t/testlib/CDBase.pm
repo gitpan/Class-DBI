@@ -9,6 +9,6 @@ my @DSN = ("dbi:SQLite:dbname=$DB", '', '', { AutoCommit => 1 });
 
 END { unlink $DB if -e $DB }
 
-__PACKAGE__->set_db(Main => @DSN);
+__PACKAGE__->connection(@DSN);
 
 1;

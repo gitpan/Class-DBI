@@ -16,16 +16,18 @@ INIT {
 	Lazy->CONSTRUCT;
 }
 
-ok(eq_set([ Lazy->columns('Primary') ],   [qw/this/]),      "Pri");
+ok(eq_set([ Lazy->columns('Primary') ],        [qw/this/]),      "Pri");
 ok(eq_set([ sort Lazy->columns('Essential') ], [qw/opop this/]), "Essential");
 ok(eq_set([ sort Lazy->columns('things') ],    [qw/that this/]), "things");
 ok(eq_set([ sort Lazy->columns('horizon') ],   [qw/eep orp/]),   "horizon");
 ok(eq_set([ sort Lazy->columns('vertical') ],  [qw/oop opop/]),  "vertical");
-ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]), "All");
+ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]),
+	"All");
 
 {
 	my @groups = Lazy->__grouper->groups_for(Lazy->find_column('this'));
-	ok eq_set([ sort @groups], [qw/things Essential Primary/]), "this (@groups)";
+	ok eq_set([ sort @groups ], [qw/things Essential Primary/]),
+		"this (@groups)";
 }
 
 {
@@ -36,15 +38,15 @@ ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]), "All
 Lazy->create({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
 
 ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
-ok($obj->_attribute_exists('this'), "Gets primary");
-ok($obj->_attribute_exists('opop'), "Gets other essential");
+ok($obj->_attribute_exists('this'),  "Gets primary");
+ok($obj->_attribute_exists('opop'),  "Gets other essential");
 ok(!$obj->_attribute_exists('that'), "But other things");
 ok(!$obj->_attribute_exists('eep'),  " nor eep");
 ok(!$obj->_attribute_exists('orp'),  " nor orp");
 ok(!$obj->_attribute_exists('oop'),  " nor oop");
 
 ok(my $val = $obj->eep, 'Fetch eep');
-ok($obj->_attribute_exists('orp'), 'Gets orp too');
+ok($obj->_attribute_exists('orp'),   'Gets orp too');
 ok(!$obj->_attribute_exists('oop'),  'But still not oop');
 ok(!$obj->_attribute_exists('that'), 'nor that');
 
@@ -53,7 +55,8 @@ ok(!$obj->_attribute_exists('that'), 'nor that');
 	ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
 	ok !$obj->_attribute_exists('oop'), " Don't have oop";
 	my $null = $obj->eep;
-	ok !$obj->_attribute_exists('oop'), " Don't have oop - even after getting eep";
+	ok !$obj->_attribute_exists('oop'),
+		" Don't have oop - even after getting eep";
 }
 
 # Test contructor breaking.
