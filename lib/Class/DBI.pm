@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -261,7 +261,8 @@ sub move {
   $obj->delete;
 
 Deletes this object from the database and from memory.  $obj is no longer
-usable after this call.
+usable after this call. If any links have been set up with hasa_list,
+then delete those first.
 
 =cut
 
@@ -272,6 +273,8 @@ WHERE   %s = ?
 
 sub delete {
   my $self = shift;
+
+  $self->_cascade_delete;
   eval {
     my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
     $sth->execute($self->id);
@@ -283,6 +286,17 @@ sub delete {
   undef %$self;
   bless $self, 'Class::Deleted';
   return SUCCESS;
+}
+
+sub _cascade_delete {
+  my $self = shift;
+  my $class = ref($self);
+
+  # Lose any crossrefs.
+  my %cascade = %{$class->__hasa_list || {}};
+  foreach my $remote (keys %cascade) {
+    $_->delete foreach $remote->search($cascade{$remote} => $self->id);
+  }
 }
 
 =head2 autocommit
@@ -512,7 +526,7 @@ sub _flesh {
         return;
     }
 
-    my @row = $sth->fetch;
+    my @row = $sth->fetchrow_array;
     $sth->finish;
     assert(@row == @cols) if DEBUG;
     @{$self}{@cols} = @row;
@@ -903,6 +917,8 @@ instances of the foreign class.
 
 =cut
 
+__PACKAGE__->mk_classdata('__hasa_list');
+
 sub hasa_list {
     my($class, $foreign_class, $foreign_keys, $accessor_name) = @_;
 
@@ -912,6 +928,10 @@ sub hasa_list {
       if @$foreign_keys > 1;
 
     my($foreign_key) = @$foreign_keys;
+
+    my $hashref = $class->__hasa_list || {};
+       $hashref->{$foreign_class} = $foreign_key;
+    $class->__hasa_list($hashref);
 
     my $accessor = sub {
         my $self = shift;

@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 14;
+use Test::More tests => 17;
 
 BEGIN {
   require './t/testlib/Film.pm';
@@ -52,14 +52,17 @@ eval { $btaste->actors($pj, $pvj, $as) };
 ok $@, $@;
 is($btaste->actors, 2, " - so we still only have 2 actors");
 
+my @bta_before = Actor->search(Film => 'Bad Taste');
+is (@bta_before, 2, "We have 2 actors in bad taste");
+ok ($btaste->delete, "Delete bad taste");
+my @bta_after = Actor->search(Film => 'Bad Taste');
+is (@bta_after, 0, " - after deleting there are no actors");
+
 # While we're here, make sure Actors have unreadable mutators and
 # unwritable accessors
 
-eval { $as->Name("Paul Reubens") };
-ok $@, $@;
-
-eval { my $name = $as->set_Name };
-ok $@, $@;
+eval { $as->Name("Paul Reubens") }; ok $@, $@;
+eval { my $name = $as->set_Name };  ok $@, $@;
 
 is($as->Name, 'Arnold Schwarzenegger', "Arnie's still Arnie");
 

@@ -4,6 +4,7 @@ MANIFEST
 Makefile.PL
 README
 lib/Class/DBI.pm
+lib/Class/DBI/Tutorial.pm
 t/01-columns.t
 t/02-Film.t
 t/03-subclassing.t
