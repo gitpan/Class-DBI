@@ -1,3 +1,23 @@
+0.19  Fri Sep  8 15:07:49 EDT 2000
+    - Forgot to update the Changes file.
+
+0.18  Fri Sep  9 18:51:45 GMT 2000
+    * new() now accepts Class::DBI objects as values
+    - hasa() is now inherited properly
+    - normalize() will now take an empty array
+
+0.17  Mon Sep  4 02:46:25 GMT 2000      *UNRELEASED*
+    - Docs forgot to turn AutoCommit on in MySQL examples
+    - Documented the behavior of new() and AUTO_INCREMENT
+    - Added support for sequences.  *Untested*
+    - *bug fix* columns() can now be added after the class has been used
+    - *bug fix* Columns added by hasa() had a chance of overwriting each 
+      other.
+
+0.16  Sun Sep  3 17:49:08 GMT 2000      *UNRELEASED*
+    * hasa() will now attempt to require the foreign class for you
+    * hasa() will setup the necessary columns for you.
+
 0.15  Sun Jul 16 23:14:20 PDT 2000
     - Fixed minor bug in DESTROY message.
     * Added hasa() object relationships.

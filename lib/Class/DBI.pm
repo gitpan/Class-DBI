@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.19 2000/09/08 18:51:45 schwern Exp $
+# $Id: DBI.pm,v 1.20 2000/09/08 19:08:19 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.18';
+$VERSION = '0.19';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
