@@ -6,13 +6,14 @@ use base 'Film';
 __PACKAGE__->table('Different_Film');
 
 sub CONSTRUCT {
-  my $class = shift;
-  $class->create_movies_table;
+	my $class = shift;
+	$class->create_movies_table;
 }
 
 sub create_movies_table {
-  my $class = shift;
-  $class->db_Main->do(qq{
+	my $class = shift;
+	$class->db_Main->do(
+		qq{
      CREATE TABLE Different_Film (
         title                   VARCHAR(255),
         director                VARCHAR(80),
@@ -21,7 +22,8 @@ sub create_movies_table {
         numexplodingsheep       INTEGER,
         hasvomit                CHAR(1)
     )
-  });
+  }
+	);
 }
 
 1;

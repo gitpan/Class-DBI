@@ -15,7 +15,8 @@ Class::DBI::ColumnGrouper - Columns and Column Groups
 	my @all = $colg->all_columns;
 	my $pri_col = $colg->primary;
 
-	if ($colg->column_exists($column_name)) { ... }
+	if ($colg->exists($column_name)) { ... }
+	if ($colg->in_database($column_name)) { ... }
 
 =head1 DESCRIPTION
 
@@ -29,7 +30,10 @@ with this directly.
 
 use strict;
 
-sub unique { my %seen; map { $seen{$_}++ ? () : $_ } @_; }
+sub unique {
+	my %seen;
+	map { $seen{$_}++ ? () : $_ } @_;
+}
 
 =head2 new
 
@@ -39,21 +43,27 @@ A new blank ColumnnGrouper object.
 
 =cut
 
-sub new { 
-	bless { 
-		_groups => {}, 
+sub new {
+	bless {
+		_groups => {},
 		_cols   => {},
-	}, shift;
+		},
+		shift;
 }
 
 sub clone {
 	my ($class, $prev) = @_;
-	bless { 
-		_groups => { map { $_ => [ $prev->group_cols($_) ] } keys %{$prev->{_groups}} },
-		_cols   => { map { $_ => { map { $_ => 1 } $prev->groups_for($_)  } } $prev->all_columns}
+	bless {
+		_groups =>
+			{ map { $_ => [ $prev->group_cols($_) ] } keys %{ $prev->{_groups} } },
+		_cols => {
+			map {
+				$_ => { map { $_ => 1 } $prev->groups_for($_) }
+				} $prev->all_columns
+		}
 	}, $class;
 }
-	
+
 =head2 add_group
 
 	$colg->add_group(People => qw/star director producer/);
@@ -64,11 +74,12 @@ This adds a list of columns as a column group.
 
 sub add_group {
 	my ($self, $group, @cols) = @_;
-	$self->add_group(Primary => $cols[0]) 
-		if ($group eq "All" or $group eq "Essential") 
-			and not $self->primary;
-	$self->add_group(Essential => @cols) 
-		if $group eq "All" and !$self->essential;
+	$self->add_group(Primary => $cols[0])
+		if ($group eq "All" or $group eq "Essential")
+		and not $self->primary;
+	$self->add_group(Essential => @cols)
+		if $group eq "All"
+		and !$self->essential;
 	@cols = unique($self->primary, @cols) if $group eq "Essential";
 	$self->{_cols}->{$_}->{$group} = 1 foreach @cols;
 	$self->{_groups}->{$group} = \@cols;
@@ -86,7 +97,7 @@ This returns a list of all columns which are in the given group.
 sub group_cols {
 	my ($self, $group) = @_;
 	return $self->all_columns if $group eq "All";
-	@{ $self->{_groups}->{$group} || [] }
+	@{ $self->{_groups}->{$group} || [] };
 }
 
 =head2 groups_for
@@ -99,7 +110,9 @@ This returns a list of all groups of which the given column is a member.
 
 sub groups_for {
 	my ($self, $col) = @_;
-	keys %{ $self->{_cols}->{$col} };
+	my %groups = %{ $self->{_cols}->{$col} || {} };
+	delete $groups{All} if keys %groups > 1;
+	return keys %groups;
 }
 
 =head2 all_columns
@@ -122,24 +135,27 @@ This returns a list of the columns in the Essential group.
 
 =cut
 
+sub all_columns { keys %{ +shift->{_cols} } }
 
-sub all_columns { keys %{+shift->{_cols}} }
-
-sub primary { 
-	my($primary) = shift->group_cols('Primary');
+sub primary {
+	my ($primary) = shift->group_cols('Primary');
 	return $primary;
 }
 
-sub essential { 
-	my $self = shift; 
+sub essential {
+	my $self = shift;
 	my @cols = $self->group_cols('Essential');
 	return @cols ? @cols : $self->all_columns;
 }
 
-=head2 column_exists
+=head2 exists / in_database
 
-	if ($colg->column_exists($column_name)) { ... }
- 
+	if ($colg->exists($column_name)) { ... } if
+	($colg->in_database($column_name)) { ... }
+
+These tell us if the column exists at all, and if it's actually in the
+database (and not a TEMP column).
+
 =cut
 
 sub exists {
@@ -147,5 +163,10 @@ sub exists {
 	exists $self->{_cols}->{$col};
 }
 
+sub in_database {
+	my ($self, $col) = @_;
+	return unless $self->exists($col);
+	return scalar grep $_ ne "TEMP", $self->groups_for($col);
+}
 
 1;

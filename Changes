@@ -1,3 +1,67 @@
+0.91 Sat Mar  8 2003
+
+	New Functionality
+		- has_many can now take an extra set of search parameters at execution
+		- has_many mapping method can now be a list
+		- Class->delete(@search_args) deletes all results matching search
+		  criteria.  
+		- search can take a final hash of arguments. Currently the only one
+		  honoured is 'order_by'
+		- searches deflate objects passed as search values as with has_a()
+		- iterators can be slice()d
+		- classes can provide their own iterators 
+		- columns in the TEMP column group will be non-persistent
+		- set_sql automatically sets up a search_ method for that SQL
+		- constraints can cross-check using new syntax, and per_column
+		  trigger points.
+		- the after_update trigger can modify the list of changed columns
+			to change refresh behaviour 
+		- Can delete via the iterator: $cd->artists->delete_all
+		- New Class::DBI::Query module for dynamically constructing queries
+		- Standardised exception handling (thanks to Tim Bunce)
+			- on_failed_create no longer needed
+		- overloading of objects
+		- autoincrements work with SQLite
+
+	Deprecations
+		- commit() and autocommit() are now update() and autoupdate()
+		- rollback() is now discard_changes()
+		- hasa() now warns if used
+		- trigger points create() and delete() warn when called
+		- trigger point on_setting no longer exists
+
+	Optimisation
+		- has_a lazy inflates other Class::DBI instances 
+		- roll our own require rather than depending on UNIVERSAL::require
+		 (thanks to Tim Bunce)
+		- Don't add __Changed = {} to every object on creation,
+			just autovivify it on demand. (Tim)
+		- Avoid calling $self->primary_column in a loop in create() (Tim)
+		- Use fetchrow_arrayref instead of fetchrow_array. (Tim)
+		- Return from _deflated_column earlier if value is not a ref. (Tim)
+		- Use $sth->{NAME_lc} instead of $sth->{NAME}. (Tim)
+		- Optmize _normalized and normalize. (Tim)
+		- optimise various calls to columns() (Tim)
+		- don't reflesh after an update - defer for lazy loading
+		- Iterator no longer inherits from Class::DBI itself.
+
+	Bug Fixes
+		- has_many maps now work as iterators
+		- columns only report as being in group 'All' if they're in no
+		  other columns (so lazy loading works in those cases!)
+		- calling create with a primary key of zero no longer attempts to 
+			use auto_increment (Tim Bunce)
+
+	Other
+		- reference Class::DBI::AbstractSearch
+		- retrieve_from_sql removes any leading 'WHERE' 
+		- inflate handles overloading better (thanks to Tim Bunce)
+		- Avoid boolean test on object, use defined instead.
+		- Tweak create() to prepare for possible caching of colmap info.
+		- better documentation on transactions
+		- test suite now uses DBD::SQLite instead of DBD::CSV
+		- consolidated some test scripts
+
 0.90 Wed Nov 27 GMT 2002
 		- hasa and associated_class merged (and deprecated) into has_a
 			- has_many therefore no longer sets up reciprocal hasa

@@ -1,19 +1,20 @@
 package Lazy;
 
-require './t/testlib/CDBase.pm';
-@ISA = 'CDBase';
+BEGIN { unshift @INC, './t/testlib'; }
+use base 'CDBase';
 use strict;
 
 # __PACKAGE__->table("Lazy");
-__PACKAGE__->columns('Primary', qw(this));
+__PACKAGE__->columns('Primary',   qw(this));
 __PACKAGE__->columns('Essential', qw(opop));
-__PACKAGE__->columns('things', qw(this that));
-__PACKAGE__->columns('horizon', qw(eep orp));
-__PACKAGE__->columns('vertical', qw(oop opop));
+__PACKAGE__->columns('things',    qw(this that));
+__PACKAGE__->columns('horizon',   qw(eep orp));
+__PACKAGE__->columns('vertical',  qw(oop opop));
 
 sub CONSTRUCT {
-  my $class = shift;
-  $class->db_Main->do(qq{
+	my $class = shift;
+	$class->db_Main->do(
+		qq{
     CREATE TABLE lazy (
         this INTEGER,
         that INTEGER,
@@ -22,9 +23,9 @@ sub CONSTRUCT {
         oop  INTEGER,
         opop INTEGER
     )
-  });
+  }
+	);
 }
 
 1;
-
 

@@ -2,9 +2,13 @@ package CDBase;
 
 use strict;
 use base qw(Class::DBI);
-use File::Temp qw/tempdir/;
-my $dir = tempdir( CLEANUP => 1 );
 
-__PACKAGE__->set_db('Main', "DBI:CSV:f_dir=$dir", '', '');
+use File::Temp qw/tempfile/;
+my (undef, $DB) = tempfile();
+my @DSN = ("dbi:SQLite:dbname=$DB", '', '', { AutoCommit => 1 });
+
+END { unlink $DB if -e $DB }
+
+__PACKAGE__->set_db(Main => @DSN);
 
 1;

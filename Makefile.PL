@@ -5,7 +5,7 @@ use ExtUtils::MakeMaker;
 
 $PACKAGE = 'Class::DBI';
 ($PACKAGE_FILE) = $PACKAGE =~ /::([^:]+)/;
-$LAST_API_CHANGE = 0.90;
+$LAST_API_CHANGE = 0.91;
 
 require 5.00502;
 
@@ -19,6 +19,12 @@ version $LAST_API_CHANGE!  Please check carefully if you are upgrading
 from a version older than $LAST_API_CHANGE.
 
 Significant changes:
+
+  0.91 - on_setting() trigger point replaced by new individual column
+          triggers (see documentation on constraints)
+       - runtime database errors now throw exceptions
+         - all errors standardised so on_failed_create no longer needed
+       - objects now overload in string or boolean context
 
   0.90 - hasa is now deprecated in favour of has_a. Therefore
           has_many no longer creates reciprocal hasa relationship.
@@ -45,14 +51,12 @@ WriteMakefile(
 	NAME                => $PACKAGE,
 	VERSION_FROM        => 'lib/Class/DBI.pm',
 	PREREQ_PM           => {
-		Class::Accessor          => '0.16',
-		Class::Data::Inheritable => '0.02',
-		DBD::CSV                 => '0.1022',
-		Ima::DBI                 => '0.26',
-		Test::More               => '0.11',
-		File::Temp               => '0.12',
-		Class::Trigger           => '0.03',
-		UNIVERSAL::exports       => '0.03',
+		'Class::Accessor'          => '0.16',
+		'Class::Data::Inheritable' => '0.02',
+		'Class::Trigger'           => '0.07',
+		'File::Temp'               => '0.12',
+		'Ima::DBI'                 => '0.28',
+		'Test::More'               => '0.47',
   },
 	dist              => { 
 		COMPRESS   => 'gzip -9',

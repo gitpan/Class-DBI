@@ -1,24 +1,25 @@
 package MyFoo;
 
-require './t/testlib/MyBase.pm';
-@ISA = 'MyBase';
+BEGIN { unshift @INC, './t/testlib'; }
+use base 'MyBase';
+
 use strict;
 
 __PACKAGE__->set_table();
 __PACKAGE__->columns(All => qw/myid name val tdate/);
-__PACKAGE__->has_a(tdate => 'Date::Simple',
+__PACKAGE__->has_a(
+	tdate   => 'Date::Simple',
 	inflate => sub { Date::Simple->new(shift) },
 	deflate => 'format',
 );
 
 sub _column_placeholder {
-  my ($self, $column) = @_;
-  return $column eq "tdate" ? "IF(1, CURDATE(), ?)" : "?";
+	my ($self, $column) = @_;
+	return $column eq "tdate" ? "IF(1, CURDATE(), ?)" : "?";
 }
 
-
 sub create_sql {
-  return qq{
+	return qq{
     myid mediumint not null auto_increment primary key,
     name varchar(50) not null default '',
     val  char(1) default 'A',

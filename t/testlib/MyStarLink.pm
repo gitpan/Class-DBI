@@ -1,18 +1,20 @@
 package MyStarLink;
 
-require './t/testlib/MyBase.pm';
-require './t/testlib/MyStar.pm';
-require './t/testlib/MyFilm.pm';
-@ISA = 'MyBase';
+BEGIN { unshift @INC, './t/testlib'; }
+use base 'MyBase';
+
+use MyStar;
+use MyFilm;
+
 use strict;
 
 __PACKAGE__->set_table();
 __PACKAGE__->columns(All => qw/linkid film star/);
-__PACKAGE__->hasa(MyFilm => 'film');
-__PACKAGE__->hasa(MyStar => 'star');
+__PACKAGE__->has_a(film  => 'MyFilm');
+__PACKAGE__->has_a(star  => 'MyStar');
 
-sub create_sql { 
-  return qq{
+sub create_sql {
+	return qq{
     linkid  TINYINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     film    TINYINT NOT NULL,
     star    TINYINT NOT NULL

@@ -1,18 +1,28 @@
 use strict;
-use Test::More tests => 8;
+use Test::More;
 
-require './t/testlib/Film.pm';
-ok Film->CONSTRUCT, "Construct Film table";
+#----------------------------------------------------------------------
+# Test database failures
+#----------------------------------------------------------------------
+
+BEGIN {
+	eval "use DBD::SQLite";
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 7);
+}
+
+INIT {
+	use lib 't/testlib';
+	use Film;
+	Film->CONSTRUCT;
+}
 
 {
 	my $btaste = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We have Bad Taste";
 	{
 		local *Ima::DBI::st::execute = sub { die "Database died" };
-		local $SIG{__WARN__} = sub { 
-			::like shift, qr/Failure.*Database died/s, "We failed";
-		};
-		$btaste->delete;
+		eval { $btaste->delete };
+		::like $@, qr/delete.*Database died/s, "We failed";
 	}
 	my $still = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We still have Bad Taste";
@@ -21,15 +31,13 @@ ok Film->CONSTRUCT, "Construct Film table";
 {
 	my $btaste = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We have Bad Taste";
-	$btaste->numexplodingsheep(10); 
+	$btaste->numexplodingsheep(10);
 	{
 		local *Ima::DBI::st::execute = sub { die "Database died" };
-		local $SIG{__WARN__} = sub { 
-			::like $_[0], qr/Cannot commit.*Database died/s, "We failed";
-		};
-		$btaste->commit;
+		eval { $btaste->update };
+		::like $@, qr/update.*Database died/s, "We failed";
 	}
-	$btaste->rollback;
+	$btaste->discard_changes;
 	my $still = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We still have Bad Taste";
 	is $btaste->numexplodingsheep, 1, "with 1 sheep";
