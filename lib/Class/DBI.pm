@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.16 2000/07/17 06:21:36 schwern Exp $
+# $Id: DBI.pm,v 1.19 2000/09/08 18:51:45 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.15';
+$VERSION = '0.18';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -71,7 +71,8 @@ sub _safe_exists {
   Film->table('Movies');
   Film->columns(All     => qw( Title Director Rating NumExplodingSheep ));
   Film->columns(Primary => qw( Title ));
-  Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
+  Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness',
+               {AutoCommit => 1});
 
 
   #-- Meanwhile, in a nearby piece of code! --#
@@ -198,7 +199,7 @@ Class::DBI needs to know how to access the database.  It does
 this through a DBI connection which you set up.  Set up is by calling
 the set_db() method and declaring a database connection named 'Main'.
 
-  Film->set_db('Main', 'dbi:mysql', 'user', 'password');
+  Film->set_db('Main', 'dbi:mysql', 'user', 'password', {AutoCommit => 1});
 
 set_db() is inherited from Ima::DBI.  See that module's man page for
 details.
@@ -251,6 +252,16 @@ $obj is an instance of Class built out of a hash reference.
                         NumExplodingSheep   => 1
                       });
 
+If the primary column is not in %data, new() will assume it is to be
+generated.  If a sequence() has been specified for this Class, it will
+use that.  Otherwise, it will assume the primary key has an
+AUTO_INCREMENT constraint on it and attempt to use that.
+
+If the class has declared relationships with foreign classes via
+hasa(), it can pass an object to new() for the value of that key.
+Class::DBI will Do The Right Thing.
+
+
 =cut
 
 __PACKAGE__->set_sql('MakeNewObj', <<"SQL", 'Main');
@@ -262,6 +273,10 @@ SQL
 
 __PACKAGE__->set_sql('LastInsertID', <<'', 'Main');
 SELECT LAST_INSERT_ID()
+
+
+__PACKAGE__->set_sql('Nextval', <<'', 'Main');
+SELECT NEXTVAL ('%s')
 
 
 sub new {
@@ -282,6 +297,33 @@ sub new {
     # You -must- have a table defined.
     assert( $self->table ) if DEBUG;
 
+    # If a primary key wasn't given, use the sequence if we have one.
+    if( $self->sequence && !_safe_exists($data, $primary_col) ) {
+        my $sth = $self->sql_Nextval($self->sequence);        
+        $sth->execute;
+        $data->{$primary_col} = $sth->fetch;
+    }
+
+    # Look for values which can be objects.
+    my $hasa_cols = $class->__hasa_columns || {};
+    $class->normalize_hash($hasa_cols);
+
+    while( my($col, $want_class) = each %$hasa_cols) {
+        if( _safe_exists($data, $col) && ref $data->{$col} ) {
+            my $obj = $data->{$col};
+            unless( $obj->isa($want_class) ) {
+                require Carp;
+                Carp::croak(sprintf <<CARP, $obj->isa($want_class));
+$class expects an object of class $want_class for $col.  Got %s.
+CARP
+
+            }
+
+            $data->{$col} = $obj->id;
+        }
+    }
+        
+
     eval {
         # Enter a new row into the database containing our object's
         # information.
@@ -291,6 +333,7 @@ sub new {
                                        );
         $sth->execute(values %$data);
 
+        # If we still don't have a primary key, try AUTO_INCREMENT.
         unless( _safe_exists($data, $primary_col) ) {
             $sth = $self->sql_LastInsertID;
             $sth->execute;
@@ -824,7 +867,6 @@ __PACKAGE__->mk_classdata('__table');
 
 sub table {
     my($proto) = shift;
-
     my($class) = ref $proto || $proto;
 
     no strict 'refs';
@@ -839,6 +881,46 @@ sub table {
     }
 
     $class->__table(@_);
+}
+
+=pod
+
+=item B<sequence>
+
+  Class->sequence($sequence_name);
+  $sequence_name = Class->sequence;
+  $sequence_name = $obj->sequence;
+
+An accessor to get/set the name of a sequence for the primary key.
+
+    Class->columns(Primary => 'id');
+    Class->sequence('class_id_seq');
+
+Class::DBI will use the sequence to generate primary keys when objects
+are created yet the primary key is not specified.
+
+B<NOTE>: Class::DBI also supports AUTO_INCREMENT and similar semantics.
+
+=cut
+
+__PACKAGE__->mk_classdata('__sequence');
+
+sub sequence {
+    my($proto) = shift;
+    my($class) = ref $proto || $proto;
+
+    no strict 'refs';
+    
+    if(@_) {
+        if( ref $proto ) {
+            require Carp;
+            Carp::carp('It is prefered to call sequence() as a class method '.
+                       '[Class->sequence($seq)] rather than an object method '.
+                       '[$obj->sequence($seq)] when setting the sequence.');
+        }
+    }
+    
+    $class->__sequence(@_);
 }
 
 =pod
@@ -920,6 +1002,8 @@ sub columns {
 
         # Force columns() to be overriden if necessary.
         $class->__columns($class_columns);
+
+        $class->_flush_col2group;
 
         return SUCCESS;
     }
@@ -1014,7 +1098,15 @@ sub _get_col2group {
 
     return $col2group;
 }
-    
+
+sub _flush_col2group {
+    my($proto) = shift;
+    my($class) = ref $proto || $proto;
+
+    my $col2group = $class->__Col2Group;
+    %$col2group = ();
+}
+
 
 =pod
 
@@ -1041,7 +1133,8 @@ And put a Class::DBI subclass around it.
     Film::Directors->table('Directors');
     Film::Directors->columns(All    => qw( Name Birthday IsInsane ));
     Film::Directors->columns(Prmary => qw( Name ));
-    Film::Directors->set_db(Main => 'dbi:mysql', 'me', 'heywoodjablowme');
+    Film::Directors->set_db(Main => 'dbi:mysql', 'me', 'heywoodjablowme',
+                            {AutoCommit => 1});
 
 Now Film can use its Director column as a way of getting at
 Film::Directors objects, instead of just the director's name.  Its a
@@ -1059,9 +1152,9 @@ instead of just their name.
 
     Class->hasa($foreign_class, @foreign_key_columns);
 
-Declares that the given Class has a relationship with the $foreign__class
-and is storing $foreign_class's primary key informaion in the
-@foreign_key_columns.
+Declares that the given Class has a relationship with the
+$foreign_class and is storing $foreign_class's primary key
+information in the @foreign_key_columns.
 
 An accessor will be generated with the name of the first element in
 @foreign_key_columns.  It gets/sets objects of $foreign_class.  Using
@@ -1073,6 +1166,15 @@ our Film::Director example...
     $btaste = Film->retreive('Bad Taste');
     $btaste->Director($pj);
 
+hasa() will try to require the foreign class for you.  If the require
+fails, it will assume its not a simple require (ie. Foreign::Class
+isn't in Foreign/Class.pm) and that you've already taken care of it
+and ignore the warning.
+
+It is not necessary to call columns() to set up the
+@foreign_key_columns.  hasa() will do this for you if you haven't
+already.
+
 XXX I don't know if I like the way this works.  It may change a bit in
 the future.  I'm not sure about the way the accessor is named.
 
@@ -1081,20 +1183,31 @@ NOTE  The two classes do not have to be in the same database!
 =cut
 
 #'#
+__PACKAGE__->mk_classdata('__hasa_columns');
+
 sub hasa {
     my($class, $foreign_class, @foreign_key_cols) = @_;
 
-    assert( !grep { !$class->is_column($_) } @foreign_key_cols ) if DEBUG;
-
     my $foreign_col_accessor = "_".$foreign_key_cols[0]."_accessor";
+
+    eval "require $foreign_class";
 
     # This is so complicated to allow multiple columns leading to the
     # same class.
     my $obj_key = "__".$foreign_class."_". 
                   join(':', @foreign_key_cols)."_Obj";
 
+    # Setup the columns for this foreign class.
+    $class->columns($obj_key, @foreign_key_cols);
+
     # Make sure pseudohashes know about the object key field.
     $class->add_fields(PROTECTED, $obj_key);
+
+    my $hasa_columns = $class->__hasa_columns || {};
+    @{$hasa_columns}{@foreign_key_cols} = 
+        ($foreign_class) x @foreign_key_cols;
+
+    $class->__hasa_columns($hasa_columns);
 
     my $accessor = sub {
         my($self) = shift;
@@ -1183,7 +1296,7 @@ as data keys.
 sub normalize {
     my($self, $columns) = @_;
     
-    assert(@$columns > 0) if DEBUG;
+    assert(ref $columns eq 'ARRAY') if DEBUG;
 
     foreach my $col (@$columns) {
         $col =~ s/^.*\.//;  # Chop off the possible table & database names.
@@ -1447,8 +1560,9 @@ If you need this feature let me know and I'll get it working.
 
 =head1 BUGS
 
-=head2 Only tested with DBD::CSV and MySQL
+=head2 Only tested with DBD::CSV and DBD::mysql.
 
+=head2 sequence() has not been tested.
 
 =head1 AUTHOR
 

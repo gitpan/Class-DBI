@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.9 2000/07/17 06:21:36 schwern Exp $
+# $Id: DBI.t,v 1.12 2000/09/08 18:52:26 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -45,7 +45,7 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 48 }
+BEGIN { $Total_tests = 53 }
 
 
 package Film;
@@ -64,7 +64,7 @@ sub HasVomit {
 
 BEGIN {
     Film->columns('Essential', qw( Title ));
-    Film->columns('Directors', qw( Director CoDirector ));
+    Film->columns('Directors', qw( Director ));
     Film->columns('Other',     qw( Rating NumExplodingSheep HasVomit ));
 }
 
@@ -354,7 +354,7 @@ $btaste = Film->retrieve('Bad Taste');
 my $pj = $btaste->Director;
 ::ok( defined $pj and 
       $pj->isa('Film::Directors') and 
-      $pj->id eq 'Peter Jackson' );
+      $pj->id eq 'Peter Jackson', 'hasa()' );
 
 # Oh no!  Its Peter Jackson's even twin, Skippy!  Born one minute after him.
 my $sj = Film::Directors->new({ Name       => 'Skippy Jackson',
@@ -369,3 +369,27 @@ $btaste->commit;
 # Make sure they didn't interfere with each other.
 ::ok( $btaste->Director->Name   eq 'Peter Jackson' );
 
+
+package YA::Film;
+
+use base qw(Film);
+
+$btaste = YA::Film->retrieve('Bad Taste');
+::ok( $btaste->CoDirector->Name eq 'Skippy Jackson', 'inheriting hasa()' );
+
+# Skippy directs a film and Peter helps!
+$sj = Film::Directors->retrieve('Skippy Jackson');
+$pj = Film::Directors->retrieve('Peter Jackson');
+
+my $tastes_bad = YA::Film->new({ Title          => 'Tastes Bad',
+                                 Director       => $sj,
+                                 CoDirector     => $pj,
+                                 Rating         => 'R',
+                                 NumExplodingSheep => 23
+                               });
+
+::ok( $tastes_bad->_Director_accessor   eq 'Skippy Jackson', 
+      'new() with objects' );
+::ok( $tastes_bad->_CoDirector_accessor eq 'Peter Jackson' );
+::ok( $tastes_bad->Director->Name   eq 'Skippy Jackson' );
+::ok( $tastes_bad->CoDirector->Name eq 'Peter Jackson' );
