@@ -7,22 +7,24 @@ use overload
  fallback => 1;
 
 sub new {
-  my ($me, $them, @data) = @_;
+  my ($me, $them, $data) = @_;
   bless {
     _class => $them,
-    _data  => \@data,
+    _data  => $data,
     _place => 0,
   }, $me;
 }
 
 sub class { shift->{_class}    }
 sub data  { @{shift->{_data}}  }
-sub count { scalar shift->data }
+sub count { 
+  my $self = shift;
+  $self->{_count} ||= scalar $self->data
+}
 
 sub next {
   my $self  = shift;
-  my @data  = $self->data;
-  my $use   = $data[$self->{_place}++] or return;
+  my $use   = $self->{_data}->[$self->{_place}++] or return;
   return $self->class->construct($use);
 }
 

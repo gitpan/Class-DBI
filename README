@@ -1,181 +1,922 @@
 NAME
-         Class::DBI - Simple Object Persistance
+            Class::DBI - Simple Database Abstraction
 
 SYNOPSIS
-         package Film;
-         use base qw(Class::DBI);
+            package Music::DBI;
+            use base 'Class::DBI';
+            Music::DBI->set_db('Main', 'dbi:mysql', 'username', 'password');
 
-         # Tell Class::DBI a little about yourself.
-         Film->table('Movies');
-         Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
-         Film->columns('Primary', 'Title');
-         Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
+            package Artist;
+            use base 'Music::DBI';
+            Artist->table('artist');
+            Artist->columns(All => qw/artistid name/);
+            Artist->has_many('cds', 'CD' => artist);
 
-         #-- Meanwhile, in a nearby piece of code! --#
-         use Film;
+            package CD;
+            use base 'Music::DBI';
+            CD->table('cd');
+            CD->columns(All => qw/cdid artist title year/);
+            CD->has_many('tracks', 'Track' => 'cd', { sort => 'position' });
+            CD->has_a(artist => 'CD::Artist');
+            CD->has_a(reldate => 'Time::Piece',
+                    inflate => sub { Time::Piece->strptime(shift => "%Y-%m-%d") },
+                    deflate => 'ymd',
+            }
 
-         # Create a new film entry for Bad Taste.
-         $btaste = Film->new({ Title       => 'Bad Taste',
-                               Director    => 'Peter Jackson',
-                               Rating      => 'R',
-                               NumExplodingSheep   => 1
-                             });
+            CD->might_have(liner_notes => LinerNotes => qw/notes/);
 
-         # Retrieve the 'Gone With The Wind' entry from the database.
-         my $gone = Film->retrieve('Gone With The Wind');
+            package Track;
+            use base 'Music::DBI';
+            Track->table('track');
+            Track->columns(All => qw/trackid cd position title/); 
 
-         # Shocking new footage found reveals bizarre Scarlet/sheep scene!
-         $gone->NumExplodingSheep(5);
-         $gone->Rating('NC-17');
-         $gone->commit;
+            #-- Meanwhile, in a nearby piece of code! --#
 
-         # Grab the 'Bladerunner' entry.
-         my $blrunner = Film->retrieve('Bladerunner');
+            my $artist = Artist->create({ artistid => 1, name => 'U2' });
 
-         # Make a copy of 'Bladerunner' and create an entry of the director's
-         # cut from it.
-         my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
+            my $cd = $artist->add_to_cds({ 
+                    cdid   => 1,
+                    title  => 'October',
+                    year   => 1980,
+            });
 
-         # Ishtar doesn't deserve an entry anymore.
-         Film->retrieve('Ishtar')->delete;
+            # Oops, got it wrong.
+            $cd->year(1981);
+            $cd->commit;
 
-         # Find all films which have a rating of PG.
-         @films = Film->search('Rating', 'PG');
+            # etc.
 
-         # Find all films which were directed by Bob
-         @films = Film->search_like('Director', 'Bob %');
+            while (my $track = $cd->tracks) {
+                    print $track->position, $track->title
+            }
+
+            $cd->delete; # also deletes the tracks
+
+            my $cd  = CD->retrieve(1);
+            my @cds = CD->retrieve_all;
+            my @cds = CD->search(year => 1980);
+            my @cds = CD->search_like(title => 'October%');
 
 DESCRIPTION
-       I hate SQL.  You hate SQL.  We all hate SQL.  Alas, we
-       often find the need to make our objects persistent and
-       like it or not an SQL database is usually the most
-       flexible solution.
+    Class::DBI provides a convenient abstraction layer to a database.
 
-       This module is for setting up a reasonably efficient,
-       reasonably simple, reasonably extendable persistent object
-       with as little SQL and DBI knowledge as possible.
+    It not only provides a simple database to object mapping layer, but can
+    be used to implement several higher order database functions (triggers,
+    referential integrity, cascading delete etc.), at the application level,
+    rather than at the database.
 
-       Its uses a scheme to automatically set up accessors for
-       each data field in your class.  These accessors control
-       access to the underlying database.
+    This is particularly useful when using a database which doesn't support
+    these (such as MySQL), or when you would like your code to be portable
+    across multiple databases which might implement these things in
+    different ways.
 
-       How to set it up
+    In short, Class::DBI aims to make it simple to introduce 'best practice'
+    when dealing with data stored in a relational database.
 
-       Here's a fairly quick set of steps on how to make your
-       class persistent.  More details about individual methods
-       will follow.
+  How to set it up
+    *Set up a database.*
+        You must have an existing database set up, have DBI.pm installed and
+        the necessary DBD:: driver module for that database. See DBI and the
+        documentation of your particular database for details.
 
-       Set up a database.
-           You must have an existing database set up, have DBI.pm
-           installed and the necessary DBD:: driver module for
-           that database.  See the DBI manpage and the
-           documentation of your particular database for details.
+    *Set up a table for your objects to be stored in.*
+        Class::DBI works on a simple one class/one table model. It is your
+        responsibility to have your database already set up. Automating that
+        process is outside the scope of Class::DBI.
 
-       Set up a table for your objects to be stored in.
-           Class::DBI works on a simple one class/one table
-           model.  It is your responsibility to set up that
-           table, automating the process would introduce too many
-           complications (unless somebody wants to convince me
-           otherwise).
+        Using our CD example, you might declare a table something like this:
 
-           Using our Film example, you might declare a table
-           something like this:
+                CREATE TABLE cd (
+                        cdid   INTEGER   PRIMARY KEY,
+                        artist INTEGER, # references 'artist'
+                        title  VARCHAR(255),
+                        year   CHAR(4),
+                );
 
-             CREATE TABLE Movies (
-                    Title      VARCHAR(255)    PRIMARY KEY,
-                    Director   VARCHAR(80),
-                    Rating     CHAR(5),    /* to fit at least 'NC-17' */
-                    NumExplodingSheep      INTEGER
-             )
+    *Inherit from Class::DBI.*
+        It is prefered that you use base.pm to do this rather than setting
+        @ISA, as your class may have to inherit some protected data fields.
 
-       Inherit from Class::DBI.
-           It is prefered that you use base.pm to do this rather
-           than appending directly to @ISA as your class may have
-           to inherit some protected data fields from Class::DBI
-           and this is important if you're using pseudohashes.
+                package CD;
+                use base 'Class::DBI';
 
-             package Film;
-             use base qw(Class::DBI);
+    *Declare a database connection*
+        Class::DBI needs to know how to access the database. It does this
+        through a DBI connection which you set up. Set up is by calling the
+        set_db() method and declaring a database connection named 'Main'.
+        (Note that this connection MUST be called 'Main', and so Class::DBI
+        will actually ignore this argument and pass 'Main' up to Ima::DBi
+        anyhow).
 
-       Declare your columns.
-           This can be done using columns().  The names of your
-           fields should match the columns in your database, one
-           to one.  Class::DBI (via Class::Accessor) will use
-           this information to determine how to create accessors.
+                CD->set_db('Main', 'dbi:mysql', 'user', 'password');
 
-             Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+        We also set up some default attributes depending on the type of
+        database we're dealing with: For instance, if MySQL is detected,
+        AutoCommit will be turned on, whereas under Oracle, ChopBlanks is
+        turned on. The defaults can be extended or overriden by passing your
+        own $attr hashref as the 5th argument.
 
-           For more information about how you can more
-           efficiently declare your columns, the section on Lazy
-           Population of Columns
+        [See Ima::DBI for more details on set_db()]
 
-       Declare the name of your table
-           Inform Class::DBI what table you will be storing your
-           objects in.  This is the table you set up eariler.
+    *Declare the name of your table*
+        Inform Class::DBI what table you are using for this class:
 
-             Film->table('Movies');
+                CD->table('cd');
 
-       Declare which field is your primary key
-           One of your fields must be a unique identifier for
-           each object.  This will be the primary key in your
-           database.  Class::DBI needs this piece of information
-           in order to construct the proper SQL statements to
-           access your stored objects.
+    *Declare your columns.*
+        This is done using the columns() method. In the simplest form, you
+        tell it the name of all your columns (primary key first):
 
-             Film->columns('Primary', 'Title');
+                CD->columns(All => qw/cdid artist title year/);
 
-       Declare a database connection
-           Class::DBI needs to know how to access the database.
-           It does this through a DBI connection which you set
-           up.  Set up is by calling the set_db() method and
-           declaring a database connection named 'Main'.
+        For more information about how you can more efficiently declare your
+        columns, "Lazy Population"
 
-             Film->set_db('Main', 'dbi:mysql', 'user', 'password');
+    *Done.*
+        That's it! You now have a class with methods to create(),
+        retrieve(), copy(), move(), search() for and delete() objects from
+        your table, as well as accessors and mutators for each of the
+        columns in that object (row).
 
-           set_db() is inherited from Ima::DBI.  See that
-           module's man page for details.
+    Let's look at all that in more detail:
 
-           XXX I should probably make this even simpler.
-           set_db_main() or something.
+CLASS METHODS
+  set_db
+            __PACKAGE__->set_db('Main', $data_source, $user, $password, \%attr);
 
-       Done.
-           All set!  You can now use the constructors (new(),
-           copy() and retrieve()) destructors (delete()) and all
-           the accessors and other garbage provided by
-           Class::DBI.  Make some new objects and muck around a
-           bit.  Watch the table in your database as your object
-           does its thing and see things being stored, changed
-           and deleted.
+    For details on this method, Ima::DBI.
 
-       Is it not nifty?  Worship the module.
+    The special connection named 'Main' must always be set. Connections are
+    inherited.
 
+    It's often wise to set up a "top level" class for your entire
+    application to inherit from, rather than directly from Class::DBI. This
+    gives you a convenient point to place system-wide overrides and
+    enhancements to Class::DBI's behavior. It also lets you set the Main
+    connection in one place rather than scattering the connection info all
+    over the code.
 
-WHAT IS THIS?
+            package My::Class::DBI;
 
-This is Class::DBI, a perl module.
+            use base 'Class::DBI';
+            __PACKAGE__->set_db('Main', 'dbi:foo', 'user', 'password');
 
+            package My::Other::Thing;
+            use base 'My::Class::DBI';
 
-HOW DO I INSTALL IT?
+    Class::DBI helps you along a bit to set up the database connection.
+    set_db() normally provides its own default attributes on a per database
+    basis. For instance, if MySQL is detected, AutoCommit will be turned on.
+    Under Oracle, ChopBlanks is turned on. As more databases are tested,
+    more defaults will be added.
 
-To install this module, cd to the directory that contains this README
-file and type the following:
+    The defaults can always be overridden by supplying your own %attr.
 
-   perl Makefile.PL
-   make test
-   make install
+  table
+            __PACKAGE__->table($table);
 
-To install this module into a specific directory, do:
-   perl Makefile.PL PREFIX=/name/of/the/directory
-   ...the rest is the same...
+            $table = Class->table;
+            $table = $obj->table;
 
-Please also read the perlmodinstall man page, if available.
+    An accessor to get/set the name of the database table in which this
+    class is stored. It -must- be set.
 
+    Table information is inherited by subclasses, but can be overridden.
 
-WHAT ELSE DO I NEED?
+  sequence
+            __PACKAGE__->sequence($sequence_name);
 
-You need these other Perl modules...
-        Carp::Assert                    0.06 or higher
-        Class::Accessor                 0.10 or higher
-        Class::Data::Inheritable        0.02 or higher
-        Ima::DBI                        0.20 or higher
-        Class::Fields                   0.08 or higher
+            $sequence_name = Class->sequence;
+            $sequence_name = $obj->sequence;
+
+    If you are using a database which supports sequences, then you should
+    declare this using the sequence() method.
+
+                    __PACKAGE__->columns(Primary => 'id');
+                    __PACKAGE__->sequence('class_id_seq');
+
+    Class::DBI will use the sequence to generate primary keys when objects
+    are created yet the primary key is not specified.
+
+    If you are using a database with AUTO_INCREMENT (e.g. MySQL) then you do
+    not need this, and a create() which does not specify a primary key will
+    fill this in automagically.
+
+CONSTRUCTORS and DESTRUCTORS
+    The following are methods provided for convenience to create, retrieve
+    and delete stored objects. It's not entirely one-size fits all and you
+    might find it necessary to override them.
+
+  create
+                    my $obj = Class->create(\%data);
+
+    This is a constructor to create a new object and store it in the
+    database.
+
+    %data consists of the initial information to place in your object and
+    the database. The keys of %data match up with the columns of your
+    objects and the values are the initial settings of those fields.
+
+            my $cd = CD->create({ 
+                    cdid   => 1,
+                    artist => $artist,
+                    title  => 'October',
+                    year   => 1980,
+            });
+
+    If the primary column is not in %data, create() will assume it is to be
+    generated. If a sequence() has been specified for this Class, it will
+    use that. Otherwise, it will assume the primary key can be generated by
+    AUTO_INCREMENT and attempt to use that.
+
+    If the class has declared relationships with foreign classes via
+    has_a(), you can pass an object to create() for the value of that key.
+    Class::DBI will Do The Right Thing.
+
+    If the create() fails, then by default we throw a fatal exception. If
+    you wish to change this behaviour, you can set up your own subroutine to
+    be called at this point using 'on_failed_create'. For example, to do
+    nothing at all you would set up:
+
+            __PACKAGE__->on_failed_create( sub { } );
+
+  find_or_create
+            my $cd = CD->find_or_create({ artist => 'U2', title => 'Boy' });
+
+    This checks if a CD can be found to match the information passed, and if
+    not creates it.
+
+  delete
+            $obj->delete;
+
+    Deletes this object from the database and from memory. If you have set
+    up any relationships using has_many, this will delete the foreign
+    elements also, recursively (cascading delete).
+
+    $obj is no longer usable after this call.
+
+RETRIEVING OBJECTS
+    We provide a few simple search methods, more to show the potential of
+    the class than to be serious search methods.
+
+  retrieve
+            $obj = Class->retrieve($id);
+
+    Given an ID it will retrieve the object with that ID from the database.
+
+            my $cd = CD->retrieve(1) or die "No such cd";
+
+  retrieve_all
+            my @objs = Class->retrieve_all;
+            my $iterator = Class->retrieve_all;
+
+    Retrieves objects for all rows in the database. This is probably a bad
+    idea if your table is big, unless you use the iterator version.
+
+  search
+            @objs = Class->search(column1 => $value, column2 => $value ...);
+
+    This is a simple search for all objects where the columns specified are
+    equal to the values specified e.g.:
+
+                    @cds = CD->search(year => 1990);
+                    @cds = CD->search(title => "Greatest Hits", year => 1990);
+
+  search_like
+            @objs = Class->search_like(column1 => $like_pattern, ....);
+
+    This is a simple search for all objects where the columns specified are
+    like the values specified. $like_pattern is a pattern given in SQL LIKE
+    predicate syntax. '%' means "any one or more characters", '_' means "any
+    single character".
+
+                    @cds = CD->search_like(title => 'October%');
+                    @cds = CD->search_like(title => 'Hits%', artist => 'Various%');
+
+ITERATORS
+            my $it = CD->search_like(title => 'October%');
+            while (my $cd = $it->next) {
+                    print $cd->title;
+            }
+
+    Any of the above searches (including those defined by has_many) can also
+    be used as an iterator. Rather than creating a list of objects matching
+    your criteria, this will return a Class::DBI::Iterator instance, which
+    can return the objects required one at a time. This should help
+    considerably with memory when accessing a large number of search
+    results.
+
+  QUICK RETRIEVAL
+            my $obj = Class->construct(\%data);
+
+    This is a protected method and can only be called by subclasses.
+
+    It constructs a new object based solely on the %data given. It treats
+    that data just like the columns of a table, where key is the column
+    name, and value is the value in that column. This is very handy for
+    cheaply setting up lots of objects from data for without going back to
+    the database.
+
+    For example, instead of doing one SELECT to get a bunch of IDs and then
+    feeding those individually to retrieve() (and thus doing more SELECT
+    calls), you can do one SELECT to get the essential data of many objects
+    and feed that data to construct():
+
+             return map $class->construct($_), $sth->fetchall_hash;
+
+COPY AND MOVE
+  copy
+            $new_obj = $obj->copy;
+            $new_obj = $obj->copy($new_id);
+            $new_obj = $obj->copy({ title => 'new_title', rating => 18 });
+
+    This creates a copy of the given $obj both in memory and in the
+    database. The only difference is that the $new_obj will have a new
+    primary identifier.
+
+    A new value for the primary key can be suppiler, otherwise the usual
+    sequence or autoincremented primary key will be used. If you wish to
+    change values other than the primary key, then pass a hashref of all the
+    new values.
+
+                    my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
+                    my $blrunner_unrated = $blrunner->copy({
+                            Title => "Bladerunner: Director's Cut",
+                            Rating => 'Unrated',
+                    });
+
+  move
+            my $new_obj = Sub::Class->move($old_obj);
+            my $new_obj = Sub::Class->move($old_obj, $new_id);
+            my $new_obj = Sub::Class->move($old_obj, \%changes);
+
+    For transfering objects from one class to another. Similar to copy(), an
+    instance of Sub::Class is created using the data in $old_obj (Sub::Class
+    is a subclass of $old_obj's subclass). Like copy(), you can supply
+    $new_id as the primary key of $new_obj (otherwise the usual sequence or
+    autoincrement is used), or a hashref of multiple new values.
+
+TRIGGERS
+            __PACKAGE__->add_trigger(before_create => \&call_before_create);
+            __PACKAGE__->add_trigger(after_create  => \&call_after_create);
+
+            __PACKAGE__->add_trigger(before_delete => \&call_before_delete);
+            __PACKAGE__->add_trigger(after_delete  => \&call_after_delete);
+
+            __PACKAGE__->add_trigger(before_update => \&call_before_update);
+            __PACKAGE__->add_trigger(after_update  => \&call_after_update);
+
+            __PACKAGE__->add_trigger(select        => \&call_after_select);
+
+    It is possible to set up triggers that will be called immediately after
+    a SELECT, or either side of a DELETE, UPDATE or CREATE. You can create
+    any number of triggers for each point, but you cannot specify the order
+    in which they will be run. Each will be passed the object being dealt
+    with (whose values you may change if required), and return values will
+    be ignored.
+
+CONSTRAINTS
+            __PACKAGE__->add_constraint('name', column => \&check_sub);
+
+            # e.g.
+
+            __PACKAGE__->add_constraint('over18', age => \&check_age);
+
+            sub check_age { 
+                    my $value = shift;
+                    return $value >= 18;
+            }
+
+    It is also possible to set up constraints on the values that can be set
+    on a column. Attempting to create a object where this constraint fails,
+    or to update the value of an existing object with an invalid value, will
+    result in an error.
+
+    Note 1: This will only prevent you from setting these values through a
+    the provided create() or set() methods. It will always be possible to
+    bypass this if you try hard enough.
+
+INSTANCE METHODS
+  accessors
+    Class::DBI inherits from Class::Accessor and thus provides accessor
+    methods for every column in your subclass. It overrides the get() and
+    set() methods provided by Accessor to automagically handle database
+    writing.
+
+  changing your accessor names
+    If you want to change the name of your accessors, you need to provide an
+    accessor_name() method, which will convert a column name to a method
+    name.
+
+    e.g: if your local naming convention was to prepend the word 'customer'
+    to each column in the 'customer' table, so that you had the columns
+    'customerid', 'customername' and 'customerage', you would write:
+
+            sub accessor_name {
+                    my ($class, $column) = @_;
+                    $column =~ s/^customer//;
+                    return $column;
+            }
+
+    Your methods would now be $customer->id, $customer->name and
+    $customer->age rather than $customer->customerid etc.
+
+    Similarly, if you want to have distinct accessor and mutator methods,
+    you would provide a mutator_name() method which would return the name of
+    the method to change the value:
+
+            sub mutator_name {
+                    my ($class, $column) = @_;
+                    return "set_$column";
+            }
+
+    If you override the mutator_name, then the accessor method will be
+    enforced as read-only, and the mutator as write-only.
+
+  manual vs auto commit
+    There are two modes for the accessors to work in. Manual commit and
+    autocommit. This is sort of analagous to the manual vs autocommit in
+    DBI, but is not implemented in terms of this. What it simply means is
+    this... when in autocommit mode every time one calls an accessor to make
+    a change the change will immediately be written to the database.
+    Otherwise, if autocommit is off, no changes will be written until
+    commit() is explicitly called.
+
+    This is an example of manual committing:
+
+                    # The calls to NumExplodingSheep() and Rating() will only make the
+                    # changes in memory, not in the database.  Once commit() is called
+                    # it writes to the database in one swell foop.
+                    $gone->NumExplodingSheep(5);
+                    $gone->Rating('NC-17');
+                    $gone->commit;
+
+    And of autocommitting:
+
+                    # Turn autocommitting on for this object.
+                    $gone->autocommit(1);
+
+                    # Each accessor call causes the new value to immediately be written.
+                    $gone->NumExplodingSheep(5);
+                    $gone->Rating('NC-17');
+
+    Manual committing is probably more efficient than autocommiting and it
+    provides the extra safety of a rollback() option to clear out all
+    unsaved changes. Autocommitting is more convient for the programmer.
+
+    If changes are left uncommitted or not rolledback when the object is
+    destroyed (falls out of scope or the program ends) then Class::DBI's
+    DESTROY method will print a warning about unsaved changes.
+
+  autocommit
+                    __PACKAGE__->autocommit($on_or_off);
+                    $commit_style = Class->autocommit;
+
+                    $obj->autocommit($on_or_off);
+                    $commit_style = $obj->autocommit;
+
+    This is an accessor to the current style of autocommitting. When called
+    with no arguments it returns the current autocommitting state, true for
+    on, false for off. When given an argument it turns autocommiting on and
+    off. A true value turns it on, a false one off. When called as a class
+    method it will control the committing style for every instance of the
+    class. When called on an individual object it will control committing
+    for just that object, overriding the choice for the class.
+
+            __PACKAGE__->autocommit(1);     # Autocommit is now on for the class.
+
+            $obj = Class->retrieve('Aliens Cut My Hair');
+            $obj->autocommit(0);      # Shut off autocommitting for this object.
+
+    The commit setting for an object is not stored in the database.
+
+    Autocommitting is off by default.
+
+    NOTE This has *nothing* to do with DBI's AutoCommit attribute.
+
+  commit
+                    $obj->commit;
+
+    Any changes you make to your object are gathered together, and only sent
+    to the database upon a commit() call.
+
+    Note: If you have transactions turned on (but see "TRANSACTIONS" below)
+    you will need to also call dbi_commit(), as this commit() merely calls
+    UPDATE on the database).
+
+    If you call commit() when autocommit is on, it'll just silently do
+    nothing.
+
+  rollback
+            $obj->rollback;
+
+    Removes any changes you've made to this object since the last commit.
+    Currently this simply reloads the values from the database. This can
+    have concurrency issues.
+
+    If you're using autocommit this method will throw an exception.
+
+  is_changed
+            my $changed = $obj->is_changed;
+            my @changed_keys = $obj->is_changed;
+
+    Indicates if the given $obj has uncommitted changes. Returns a list of
+    keys which have changed.
+
+  id
+            $id = $obj->id;
+
+    Returns a unique identifier for this object. It's the equivalent of
+    $obj->get($self->columns('Primary'));
+
+TABLE RELATIONSHIPS
+    Databases are all about relationships. And thus Class::DBI needs a way
+    for you to set up descriptions of your relationhips.
+
+    Currently we provide three such methods: 'has_a', 'has_many', and
+    'might_have'.
+
+  has_a
+            CD->has_a(artist => 'CD::Artist');
+            print $cd->artist->name;
+
+            CD->has_a(reldate => 'Date::Simple');
+            print $cd->reldate->format("%d %b, %Y");
+
+            CD->has_a(reldate => 'Time::Piece',
+                    inflate => sub { Time::Piece->strptime(shift => "%Y-%m-%d") },
+                    deflate => 'ymd',
+            }
+            print $cd->reldate->strftime("%d %b, %Y");
+
+    We use 'has_a' to declare that the value we have stored in the column is
+    a reference to something else. Thus, when we access the 'artist' method
+    we don't just want that ID returned, but instead we inflate it to this
+    other object.
+
+    This might be another Class::DBI representation, in which case we will
+    call retrieve() on that class, or it can be any other object which is
+    either instantiated with new(), or by a given 'inflate' method, and
+    which can be 'deflated' either by stringification (such as
+    Date::Simple), or by the given 'deflate' method.
+
+  has_many
+            CD->has_many('tracks', CD::Track => 'cd');
+            my @tracks = $cd->tracks;
+
+            my $track6 = $cd->add_to_tracks({ 
+                    position => 6,
+                    title    => 'Tomorrow',
+            });
+
+    We use 'has_many' to declare that someone else is storing our primary
+    key in their table, and create a method which returns a list of all the
+    associated objects, and another method to create a new associated
+    object.
+
+    In the above example we say that the table of the CD::Track class
+    contains our primary key in its 'cd' column, and that we wish to access
+    all the occasions of that (i.e. the tracks on this cd) through the
+    'tracks' method.
+
+    We also create an 'add_to_tracks' method that adds a track to a given
+    CD. In this example this call is exactly equivalent to calling:
+
+            my $track6 = CD::Track->create({
+                    cd       => $cd->id,
+                    position => 6,
+                    title    => 'Tomorrow',
+            });
+
+   Ordering
+            CD->has_many('tracks', 'Track' => 'cd', { sort => 'playorder' });
+
+    Often you wish to order the values returned from has_many. This can be
+    done by passing a hash ref containing a 'sort' value of the column by
+    wish you want to order.
+
+   Mapping
+            CD->has_many('styles', [ 'StyleRef' => 'style' ], 'cd');
+
+    For many-to-many relationships, where we have a lookup table, we can
+    avoid having to set up a helper method to convert our list of
+    cross-references into the objects we really want, by adding the mapping
+    method to our foreign class declaration.
+
+    The above is exactly equivalent to:
+
+            CD->has_many('_style_refs', 'StyleRef', 'cd');
+            sub styles { 
+                    my $self = shift;
+                    return map $_->style, $self->_style_refs;
+            }
+
+  might_have
+            CD->might_have(method_name => Class => (@fields_to_import));
+
+            CD->might_have(liner_notes => LinerNotes => qw/notes/);
+
+            my $liner_notes_object = $cd->liner_notes;
+            my $notes = $cd->notes; # equivalent to $cd->liner_notes->notes;
+
+    might_have() is similar to has_many() for relationships that can have at
+    most one associated objects. For example, if you have a CD database to
+    which you want to add liner notes information, you might not want to add
+    a 'liner_notes' column to your main CD table even though there is no
+    multiplicity of relationship involved (each CD has at most one 'liner
+    notes' field). So, we create another table with the same primary key as
+    this one, with which we can cross-reference.
+
+    But you don't want to have to keep writing methods to turn the the
+    'list' of liner_notes objects you'd get back from has_many into the
+    single object you'd need. So, might_have() does this work for you. It
+    creates you an accessor to fetch the single object back if it exists,
+    and it also allows you import any of its methods into your namespace.
+    So, in the example above, the LinerNotes class can be mostly invisible -
+    you can just call $cd->notes and it will call the notes method on the
+    correct LinerNotes object transparently for you.
+
+    Making sure you don't have namespace clashes is up to you, as is
+    correctly creating the objects, but I may make these simpler in later
+    versions. (Particularly if someone asks for them!)
+
+  Class::DBI::Join
+    If none of these do exactly what you want, and you have more complex
+    many-to-many relationships, you may find Class::DBI::Join (available on
+    CPAN) to be useful.
+
+  Notes
+    has_a(), might_have() and has_many() will try to require the relevant
+    foreign class for you. If the require fails, it will assume it's not a
+    simple require (ie. Foreign::Class isn't in Foreign/Class.pm) and that
+    you've already taken care of it and ignore the warning.
+
+    NOTE: The two classes in a relationship do not have to be in the same
+    database, on the same machine, or even in the same type of database! It
+    is quite acceptable for a table in a MySQL database to be connected to a
+    different table in an Oracle database, and for cascading delete etc to
+    work across these. This should assist greatly if you need to migrate a
+    database gradually.
+
+DEFINING SQL STATEMENTS
+    There are several main methods for setting up your own SQL queries:
+
+    For queries which could be used to create a list of matching objects you
+    can create a constructor method associated with this SQL and let
+    Class::DBI do the work for you, or just inline the entire query.
+
+    For more complex queries you need to fall back on the underlying
+    Ima::DBI query mechanism.
+
+  add_constructor
+            __PACKAGE__->add_constructor(method_name => 'SQL_where_clause');
+
+    The SQL can be of arbitrary complexity and will be turned into: SELECT
+    (essential columns) FROM (table name) WHERE <your SQL>
+
+    This will then create a method of the name you specify, which returns a
+    list of objects as with any built in query.
+
+    For example:
+
+            CD->add_constructor(new_music => 'year > 2000');
+            my @recent = CD->new_music;
+
+    You can also supply placeholders in your SQL, which must then be
+    specified at query time:
+
+            CD->add_constructor(new_music => 'year > ?');
+            my @recent = CD->new_music(2000);
+
+  retrieve_from_sql
+            my @cds = CD->retrieve_from_sql(qq{
+                    artist = 'Ozzy Osbourne' AND
+                    title like "%Crazy"      AND
+                    year <= 1986
+                    ORDER BY year
+                    LIMIT 2,3
+            });
+
+    On occassions where you want to execute arbitrary SQL, but don't want to
+    go to the trouble of setting up a constructor method, you can inline the
+    entire WHERE clause, and just get the objects back directly.
+
+  Ima::DBI queries
+    When you can't use 'add_constructor', e.g. when using aggregate
+    functions, you can fall back on the fact that Class::DBI inherits from
+    Ima::DBI and prefers to use its style of dealing with statemtents, via
+    set_sql().
+
+    So, to add a query that returns the 10 Artists with the most CDs, you
+    could write (with MySQL):
+
+            Artist->set_sql(most_cds => qq{
+                    SELECT artist.id, SUM(cd.id) AS cds
+                      FROM artist, cd
+                     WHERE artist.id = cd.artist
+                     GROUP BY artist.id
+                     ORDER BY cds DESC
+                     LIMIT 10
+            });
+
+    Then you can set up a method that executes these are returns the
+    relevant objects:
+
+      sub top_ten {
+        my $class = shift;
+        my $sth = $class->sql_top_ten;
+           $sth->execute;
+        return $class->sth_to_objects($sth);
+      }
+
+    The $sth which we use to return the objects here is a normal DBI-style
+    statement handle, sof if your results can't even be turned into objects
+    easily, you can still call $sth->fetchrow_array etc and return whatever
+    data you choose.
+
+    If you want to write new methods which are inheritable by your
+    subclasses you must be careful not to hardcode any information about
+    your class's table name or primary key, and instead use the table() and
+    columns() methods instead.
+
+LAZY POPULATION
+    In the tradition of Perl, Class::DBI is lazy about how it loads your
+    objects. Often, you find yourself using only a small number of the
+    available columns and it would be a waste of memory to load all of them
+    just to get at two, especially if you're dealing with large numbers of
+    objects simultaneously.
+
+    You should therefore group together your columns by typical usage, as
+    fetching one value from a group can also pre-fetch all the others in
+    that group for you, for more efficient access.
+
+    So for example, if we usually fetch the artist and title, but don't use
+    the 'year' so much, then we could say the following:
+
+                    CD->columns(Primary   => 'cdid');
+                    CD->columns(Essential => qw/artist title/);
+                    CD->columns(Others    => qw/year runlength/);
+
+    Now when you fetch back a CD it will come pre-loaded with the 'artist'
+    and 'title' fields. Fetching the 'year' will mean another visit to the
+    database, but will bring back the 'runlength' whilst it's there. This
+    can potentially increase performance.
+
+    If you don't like this behavior, then just add all your columns to the
+    'All' group, and Class::DBI will load everything at once.
+
+  columns
+            my @all_columns  = $class->columns;
+            my @columns      = $class->columns($group);
+
+            my $primary      = $class->_primary;
+            my @essential    = $class->_essential;
+
+    There are three 'reserved' groups. 'All', 'Essential' and 'Primary'.
+
+    'All' are all columns used by the class. If not set it will be created
+    from all the other groups.
+
+    'Primary' is the single primary key column for this class. It *must* be
+    set before objects can be used. (Multiple primary keys are not
+    supported). If 'All' is given but not 'Primary' it will assume the first
+    column in 'All' is the primary key.
+
+    'Essential' are the minimal set of columns needed to load and use the
+    object. Only the columns in this group will be loaded when an object is
+    retrieve()'d. It is typically used to save memory on a class that has a
+    lot of columns but where we mostly only use a few of them. It will
+    automatically be set to 'All' if you don't set it yourself. The
+    'Primary' column is always part of your 'Essential' group and Class::DBI
+    will put it there if you don't.
+
+    For simplicity we provide private '_primary' and '_essential' methods
+    which return these.
+
+  has_column
+                    Class->has_column($column);
+                    $obj->has_column($column);
+
+    This will return true if the given $column is a column of the class or
+    object.
+
+DATA NORMALIZATION
+    SQL is largely case insensitive. Perl is largely not. This can lead to
+    problems when reading information out of a database. Class::DBI does
+    some data normalization, and provides you some methods for doing
+    likewise.
+
+  normalize
+            $obj->normalize(\@columns);
+
+    There is no guarantee how a database will muck with the case of columns,
+    so to protect against things like DBI->fetchrow_hashref() returning
+    strangely cased column names (along with table names appended to the
+    front) we normalize all column names before using them as data keys.
+
+  normalize_hash
+                    $obj->normalize_hash(\%hash);
+
+    Given a %hash, it will normalize all its keys using normalize(). This is
+    for convenience.
+
+TRANSACTIONS
+    Class::DBI does not cope well with transactions, much preferring
+    auto-commit to be turned on in your database. In particular:
+
+    1   Your database handles are shared with possibly many other totally
+        unrelated classes. This means if you commit one class's handle you
+        might actually be committing another class's transaction as well.
+
+    2   A single class might have many database handles. Even worse, if
+        you're working with a subclass it might have handles you're not
+        aware of!
+
+    There no plans in the near future to improve this situation. If you find
+    yourself using Class::DBI in a transactional environment, you should try
+    to keep the scope of your transactions small, preferably down to the
+    scope of a single method. You may also wish to explore the commit() and
+    rollback() methods of Ima::DBI. (To disambiguate from the commit() and
+    rollback() method in Class::DBI which express very different concepts,
+    we provide dbi_commit() and dbi_rollback() as thin wrappers to the
+    Ima::DBI versions.)
+
+CAVEATS
+  Single column primary keys only
+    Composite primary keys are not supported. There are currently no plans
+    to change this, unless someone really wants to convince me otherwise.
+
+  Don't change the value of your primary column
+    Altering the primary key column currently causes Bad Things to happen. I
+    should really protect against this.
+
+TODO
+  Cookbook
+    I plan to include a 'Cookbook' of typical tricks and tips. Please send
+    me your suggestions.
+
+  Make all internal statements use fully-qualified columns
+SUPPORTED DATABASES
+    Theoretically this should work with almost any standard RDBMS. Of
+    course, in the real world, we know that that's not true. We know that
+    this works with MySQL, PostgrSQL and SQLite, each of which have their
+    own additional subclass on CPAN that you may with to explore if you're
+    using any of these.
+
+            L<Class::DBI::mysql>, L<Class::DBI::Pg>, L<Class::DBI::SQLite>
+
+    For the most part it's been reported to work with Oracle and Sybase.
+    Beyond that lies The Great Unknown(tm). If you have access to other
+    databases, please give this a test run, and let me know the results.
+
+    This is known not to work with DBD::RAM
+
+CURRENT AUTHOR
+    Tony Bowden <classdbi@tmtm.com>
+
+AUTHOR EMERITUS
+    Michael G Schwern <schwern@pobox.com>
+
+THANKS TO
+    Uri Gutman, Damian Conway, Mike Lambert, Tatsuhiko Miyagawa and the POOP
+    group.
+
+MAILING LISTS
+    There are two mailings lists devoted to Class::DBI, a 'users' list for
+    general queries on the use of Class::DBI, bug reports, and suggestions
+    for improvements or new features, and a 'developers' list for more
+    detailed discussion on the innards, and technical details of
+    implementing new ideas.
+
+    To join the users list visit
+    http://groups.kasei.com/mail/info/cdbi-talk.
+
+    To join the developers list visit
+    http://groups.kasei.com/mail/info/cdbi-dev.
+
+TALK TO ME
+    If you use this in production code, you might like to consider mailing
+    me at classdbi@tmtm.com to let me know. Then, if I decide to change the
+    interface to anything, I'll let you know first.
+
+    I like getting feedback anyway, so feel free to mail me if you use this
+    at all, and like it, or don't use it because you don't like it. Or
+    whatever.
+
+LICENSE
+    This library is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+
+SEE ALSO
+    http://poop.sourceforge.net/ provides a document comparing a variety of
+    different approaches to database persistence, such as Class::DBI,
+    Alazabo, Tangram, SPOPS etc.
+
+    CPAN contains a variety of other modules that can be used with
+    Class::DBI: Class::DBI::Join, Class::DBI::FromCGI etc.
+
+    For a full list see: http://search.cpan.org/search?query=Class%3A%3ADBI
+
+    Class::DBI is built on top of Ima::DBI, Class::Accessor and
+    Class::Data::Inheritable.
+

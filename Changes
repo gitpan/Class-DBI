@@ -1,22 +1,63 @@
+0.90 Wed Nov 27 GMT 2002
+		- hasa and associated_class merged (and deprecated) into has_a
+			- has_many therefore no longer sets up reciprocal hasa
+		- allow search() and search_like() to take multiple columns
+		- added find_or_create()
+		- add_constructor() is now preferred to make_filter()
+		- added retrieve_from_sql() for inline SQL
+		- documented running arbitrary SQL and using sth_to_objects to 
+			convert these to objects. (Making sth_to_objects public too)
+		- has_many can now call a mapping method on the results
+			(for simpler many-to-many joins, for example)
+		- has_many adds an 'add_to_<whatevers>' method 
+			e.g.  CD->has_many(tracks => Track);
+			now adds not just 'tracks' method, but also 'add_to_tracks'.
+			(thanks to Michael Styer)
+		- try to guess table name if none given
+		- speed up iterators (thanks to Tom Renfro)
+		- added (undocumented) data_type method
+			(thanks to Tatsuhiko Miyagawa)
+		- renamed column_type() to associated_class()
+		- added references to Class::DBI::SQLite, Class::DBI::Pg,
+			and Class::Join
+		- before_create trigger can now modify object itself
+		- uses UNIVERSAL::require instead of rolling our own
+		- marked primary_key(), is_column(), add_hook() as deprecated
+		- changed _ids_to_objects to receieve listref, rather than list
+			to cope with weird bug in 5.005_03 (thanks to Tatsuhiko Miyagawa)
+		- warn if column name clashes with built-in method
+		- third argument to has_many is now optional, defaulting to our
+		  'class-name' (undocumented)
+		- provide normalised method names if appropriate (i.e. a Film column
+		  will give us methods $obj->Film and $obj->film). This previously
+		  happened inconsistently.
+		- split most of the column related code to Class::DBI::Columns
+		- remove dependency on Class::Fields
+		- reference the new Class::DBI mailing lists
+		- Give better errors if no database connection set up 
+			(thanks to Simon Cozens)
+		- A failed create now calls $class->on_failed_create, which by
+		  default dies, but can be made to do whatever you like. 
+
 0.89 Mon Jun 24 2002
-    - allow has_many to not have a relationship 
-       (Thanks to Brian Parker)
-    - renamed (undocumented) min() and max() to 
-       minimum_value_of() and maximum_value_of()
-    - croak() and carp() deprecated in favour of _croak() and _carp()
-    - primary() and essential() deprecated in favour of 
-      _primary() and _essential()
-    - normalize_one() deprecated in favour of _normalize_one
-    - If a 'might-have' link points to nothing, don't give a 'Can't call
-      method' error
-    - better reporting on errors from create etc.
-    - better reporting when you incorrectly set through hasa()
-    - handle primary/foreign key value of zero better
-       (reported by Jim O'Brien)
-    - added (undocumented) 'column_type' based on ideas from
-      Matthew Simon Cavalletto and Tatsuhiko Miyagawa.
-    - brought delete triggers in line with documentation
-       (reported by Barry Hoggard, fixed by Tatsuhiko Miyagawa)
+		- allow has_many to not have a relationship 
+			(Thanks to Brian Parker)
+		- renamed (undocumented) min() and max() to 
+		  minimum_value_of() and maximum_value_of()
+		- croak() and carp() deprecated in favour of _croak() and _carp()
+		- primary() and essential() deprecated in favour of 
+		  primary_key() and _essential()/columns(essential);
+		- normalize_one() deprecated in favour of _normalize_one
+		- If a 'might-have' link points to nothing, don't give a 'Can't call
+		  method' error
+		- better reporting on errors from create etc.
+		- better reporting when you incorrectly set through hasa()
+		- handle primary/foreign key value of zero better
+			(reported by Jim O'Brien)
+		- added (undocumented) 'column_type' based on ideas from
+		  Matthew Simon Cavalletto and Tatsuhiko Miyagawa.
+		- brought delete triggers in line with documentation
+			(reported by Barry Hoggard, fixed by Tatsuhiko Miyagawa)
 
 0.88 Beltane 2000
     - fix for hasa() and create() with modified accessor/mutator names

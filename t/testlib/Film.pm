@@ -7,7 +7,7 @@ use strict;
 __PACKAGE__->table('Movies');
 __PACKAGE__->columns('Primary', 'Title');
 __PACKAGE__->columns('Essential', qw( Title ));
-__PACKAGE__->columns('Directors', qw( Director ));
+__PACKAGE__->columns('Directors', qw( Director CoDirector ));
 __PACKAGE__->columns('Other',     qw( Rating NumExplodingSheep HasVomit ));
 
 sub CONSTRUCT {

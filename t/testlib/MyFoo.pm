@@ -6,7 +6,10 @@ use strict;
 
 __PACKAGE__->set_table();
 __PACKAGE__->columns(All => qw/myid name val tdate/);
-__PACKAGE__->column_type(tdate => 'Date::Simple');
+__PACKAGE__->has_a(tdate => 'Date::Simple',
+	inflate => sub { Date::Simple->new(shift) },
+	deflate => 'format',
+);
 
 sub _column_placeholder {
   my ($self, $column) = @_;

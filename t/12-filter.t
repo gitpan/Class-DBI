@@ -1,15 +1,17 @@
 use strict;
-use Test::More tests => 17;
+use Test::More tests => 19;
 
 require './t/testlib/Actor.pm';
 require './t/testlib/Film.pm';
 Actor->CONSTRUCT;
 Film->CONSTRUCT;
 
-Film->has_many(actors => Actor => film => { sort => 'name' });
+Film->has_many(actors => Actor => { sort => 'name' });
+Actor->hasa('Film' => 'film');
 my $film = Film->create({ Title => 'MY Film' });
 
 Actor->make_filter(between => '%s >= ? AND %s <= ?');
+Actor->add_constructor(double_search => 'name = ? AND salary = ?');
 
 my @act = (
   Actor->create({
@@ -22,6 +24,12 @@ my @act = (
     name => 'Actor 3', film => $film, salary => 30,
   }),
 );
+
+{
+  my @actors = Actor->double_search("Actor 1", 10);
+  is @actors, 1, "Got one actor";
+  is $actors[0]->name, "Actor 1";
+}
 
 { 
   ok my @actors = Actor->salary_between(0, 100), "Range 0 - 100";

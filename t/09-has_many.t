@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 25;
+use Test::More tests => 27;
 
 BEGIN {
   require './t/testlib/Film.pm';
@@ -7,7 +7,8 @@ BEGIN {
   Film->CONSTRUCT;
   Actor->CONSTRUCT;
   Film->has_many(actors => Actor => 'Film', { sort => 'name' });
-  is(Actor->_primary, 'name', "Actor primary OK");
+	Actor->hasa(Film => 'Film');
+  is(Actor->primary_column, 'name', "Actor primary OK");
 }
 
 ok(Actor->can('Salary'), "Actor table set-up OK");
@@ -31,11 +32,21 @@ is $pvj->Film->id, $btaste->id, "Now film";
   is($actors[0]->Name, $pvj->Name, " - the correct one");
 }
 
-ok( my $pj = Actor->create({ 
+my %pj_data = (
+		Name       => 'Peter Jackson',
+		Salary     => '0',  # it's a labour of love
+);
+
+eval { my $pj = Film->add_to_actors( \%pj_data ) };
+like $@, qr/class/, "add_to_actors must be object method";
+
+eval { my $pj = $btaste->add_to_actors( %pj_data ) };
+like $@, qr/needs/, "add_to_actors takes hash";
+
+ok( my $pj = $btaste->add_to_actors({ 
   Name       => 'Peter Jackson',
-  Film       => $btaste,
   Salary     => '0',  # it's a labour of love
-}), 'add another actor' );
+}), 'add_to_actors' );
 is $pj->Name, "Peter Jackson", "PJ ok";
 is $pvj->Name, "Peter Vere-Jones", "PVJ still ok";
 

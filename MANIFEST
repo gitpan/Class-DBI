@@ -4,6 +4,7 @@ MANIFEST
 Makefile.PL
 README
 lib/Class/DBI.pm
+lib/Class/DBI/ColumnGrouper.pm
 lib/Class/DBI/Iterator.pm
 t/01-columns.t
 t/02-Film.t
@@ -13,13 +14,20 @@ t/05-pseudohashes.t
 t/06-hasa.t
 t/07-Move.t
 t/08-inheritcols.t
-t/09-hasa-list.t
+t/09-has_many.t
 t/10-mysql.t
 t/11-triggers.t
 t/12-filter.t
 t/13-constraint.t
 t/14-might_have.t
+t/15-accessor.t
+t/16-deprecated.t
+t/17-data_type.t
+t/18-has_a.t
+t/98-failure.t
+t/99-misc.t
 t/testlib/Actor.pm
+t/testlib/Binary.pm
 t/testlib/Blurb.pm
 t/testlib/CDBase.pm
 t/testlib/Director.pm
@@ -28,5 +36,6 @@ t/testlib/Lazy.pm
 t/testlib/MyBase.pm
 t/testlib/MyFilm.pm
 t/testlib/MyFoo.pm
-t/testlib/MyVideo.pm
+t/testlib/MyStar.pm
+t/testlib/MyStarLink.pm
 t/testlib/OtherFilm.pm

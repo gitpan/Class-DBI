@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 26;
+use Test::More tests => 32;
 
 #-------------------------------------------------------------------------
 package State;
@@ -35,39 +35,33 @@ CD->columns('All' => qw/artist title length/);
 
 package main;
 
-is (State->table, 'State', 'table()');
-is (State->_primary, 'name', 'primary()');
+is (State->table, 'State', 'State table()');
+is (State->primary_column, 'name', 'State primary()');
+is_deeply [State->columns('Primary')] =>  [qw/name/],
+   'State Primary:' . join ", ", State->columns('Primary');
+is_deeply [sort State->columns('Essential')] => [qw/abbreviation name/],
+   'State Essential:' . join ", ",  State->columns('Essential');
+is_deeply [sort State->columns('All')] => 
+						[sort qw/name abbreviation rain snowfall capital population/],
+   'State All:'. join ", ", State->columns('All');
 
-ok eq_set(
-     [State->columns('Primary')],   [qw/name/]
-   ), 'Primary cols:' . join ", ", State->columns('Primary');
-ok eq_set(
-     [State->columns('Essential')], [qw/name abbreviation/]
-   ), 'Essential cols:' . join ", ",  State->columns('Essential');
-ok eq_set(
-     [State->columns('All')], 
-     [qw/name abbreviation rain snowfall capital population/]
-   ), 'All cols:'. join ", ", State->columns('All');
 
-is (CD->_primary, 'artist', 'primary()');
-ok eq_set(
-     [CD->columns('All')], [qw/artist title length/]
-   ), 'All cols:'. join ", ", CD->columns('All');
-ok eq_set(
-     [CD->columns('Essential')], [qw/artist title length/]
-   ), 'Essential cols:'. join ", ", CD->columns('Essential');
-ok eq_set(
-     [CD->columns('Primary')],   [qw/artist/]
-   ), 'Primary cols:'. join ", ", CD->columns('Primary');
+is (CD->primary_column, 'artist', 'CD primary()');
+is_deeply [CD->columns('Primary')] => [qw/artist/],
+   'CD primary:'. join ", ", CD->columns('Primary');
+is_deeply [sort CD->columns('All')] => [qw/artist length title/],
+   'CD all:'. join ", ", CD->columns('All');
+is_deeply [sort CD->columns('Essential')] => [qw/artist length title/],
+   'CD essential:'. join ", ", CD->columns('Essential');
 
 
 { local $SIG{__WARN__} = sub { ok 1, "Error thrown" };
   ok (!State->columns('Nonsense'), "No Nonsense group");
+  ok( State->is_column('capital'),      'is_column deprecated');
 }
 ok( State->has_column('Rain'),        'has_column Rain');
 ok( State->has_column('rain'),        'has_column rain');
 ok( !State->has_column('HGLAGAGlAG'), '!has_column HGLAGAGlAG');
-ok( State->is_column('capital'),      'is_column');
 
 ok( !State->can('Rain'),               'No Rain accessor set up');
 ok( State->can('Rainfall'),            'Rainfall accessor set up');
@@ -82,4 +76,22 @@ ok( State->can('_Snowfall_accessor'),     ' with alias');
 ok( !State->can('snowfall'),              ' (not normalized)');
 ok( State->can('set_Snowfall'),           'overriden mutator');
 ok( State->can('_set_Snowfall_accessor'), ' with alias');
+
+{
+	eval {
+		my @grps = State->_cols2groups("Huh");
+	};
+	like $@, qr/not in any groups/, "Huh not in groups";
+
+	my @grps = sort State->_cols2groups(qw/rain capital/);
+	is @grps, 2, "Rain and Capital = 2 groups";
+	is $grps[0], 'Other', " - Other";
+	is $grps[1], 'Weather', " - Weather";
+}
+
+{	
+	local $SIG{__WARN__} = sub {};
+	eval { Class::DBI->retrieve(1) };
+	like $@, qr/No database connection/, "Need a connection for queries";
+}
 

@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 5;
+use Test::More tests => 10;
 
 $|++;
 
@@ -8,10 +8,17 @@ require './t/testlib/Blurb.pm';
 Film->CONSTRUCT;
 Blurb->CONSTRUCT;
 
+is Blurb->primary_column, "title", "Primary key of Blurb = title";
+is_deeply [Blurb->_essential], [Blurb->all_columns], "Essential = All";
+
+eval { Blurb->retrieve(10) };
+is $@, "", "No problem retrieving non-existent Blurb";
+
 Film->might_have(info => Blurb => qw/blurb/);
 
 { 
-	my $bt = Film->retrieve('Bad Taste');
+	ok my $bt = Film->retrieve('Bad Taste'), "Get Film";
+	isa_ok $bt, "Film";
   is $bt->info, undef, "No blurb yet";
 }
 
