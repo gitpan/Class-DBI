@@ -6,7 +6,9 @@ use base 'CDBase';
 use strict;
 
 __PACKAGE__->table('Actor');
-__PACKAGE__->columns('All' => qw/ Name Film Salary /);
+__PACKAGE__->columns(All  => qw/ Name Film Salary /);
+__PACKAGE__->columns(TEMP => qw/ nonpersistent /);
+__PACKAGE__->add_constructor(salary_between => 'salary >= ? AND salary <= ?');
 
 sub mutator_name { "set_$_[1]" }
 
@@ -26,11 +28,6 @@ sub create_actors_table {
      )
   }
 	);
-}
-
-sub salary_between {
-	my ($class, $low, $high) = @_;
-	$class->between(salary => $low, salary => $high);
 }
 
 1;

@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 33);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 31);
 }
 
 INIT {
@@ -32,29 +32,13 @@ ok(
 );
 
 {
-	# should output:
-	# ok 9 - ID already stored
-	# ok 10 -  *** Called get isinsane
-	# ok 11 -  *** Need to query db
-	# ok 12 - But we know he's insane
-
-	package Director;   # SUPER won't work unless we actually switch package ...
-	local *_run_query =
-		sub { ::fail("Shouldn't need to query db"); shift->SUPER::_run_query(@_) };
-
-	package main;
 	ok $btaste = Film->retrieve('Bad Taste'), "Reretrieve Bad Taste";
 	ok $pj = $btaste->Director, "Bad taste now hasa() director";
 	isa_ok $pj => 'Director';
-	is $pj->id, 'Peter Jackson', 'ID already stored';
-
-	package Director;
-	local *_run_query =
-		sub { ::pass(" *** Need to query db"); shift->SUPER::_run_query(@_) };
-
-	package main;
-	local *Director::get =
-		sub { ::pass(" *** Called get $_[1]"); shift->Class::DBI::get(@_) };
+	{
+		local *Ima::DBI::st::execute = sub { ::fail("Shouldn't need to query db"); };
+		is $pj->id, 'Peter Jackson', 'ID already stored';
+	}
 	ok $pj->IsInsane, "But we know he's insane";
 }
 

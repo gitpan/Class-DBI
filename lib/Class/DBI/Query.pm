@@ -3,6 +3,7 @@ package Class::DBI::Query::Base;
 use strict;
 
 use base 'Class::Accessor';
+use Storable 'dclone';
 
 sub new {
 	my ($class, $fields) = @_;
@@ -25,13 +26,7 @@ sub set {
 	$self->{$key} = [@args];
 }
 
-sub clone {
-	my $self = shift;
-	use Data::Dumper;
-	my $d = Data::Dumper->new([$self]);
-	$d->Purity(1)->Terse(1)->Deepcopy(1);
-	return eval $d->Dump;
-}
+sub clone { dclone shift }
 
 package Class::DBI::Query;
 

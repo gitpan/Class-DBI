@@ -1,3 +1,41 @@
+0.93  Wed Jul 2 2003
+
+	New Functionality
+		- Multi-column primary keys are now supported. [with huge thanks to Tim
+		  Bunce]
+		- New syntax for inbuilt SQL
+		- classes can control stringification via as_string() and
+		  stringify_column().
+		- set_sql automatically translates __TABLE__, __ESSENTIAL__, and
+		  __IDENTIFIER__
+
+	Performance Improvements
+		- use Storable's dclone() rather than Data::Dumper's deepcopy
+
+	Documentation
+		- document the order_by option to search() [Drew Taylor]
+		- fix the documentation of the DBI connect string [Phil Crow]
+		- document working with pre_create triggers
+		- add a note on dynamically generating a database connection
+		- avoid using (shift => $val) due to quoting issues! [Simon Wilcox]
+		- refer to Class::DBI::Oracle for sequences [Jay Strauss]
+		- give better explanation for construct() [Jay Strauss]
+		- document get/set with multiple arguments [Jay Strauss]
+		- more detailed description of arguments to has_a()
+
+	Bug Fixes
+		- Bug with setting driver defaults [Jay Strauss + Schwern]
+		- Bug where selecting a column that was only in 'All' group also
+		  attempted to fetch any TEMP columns. [Dominic Mitchell]
+
+	Removal of Functionality
+		- Undocumented ordered_search method has been removed in favour of
+		  order_by option to search.
+		- Undocumented make_filter method removed in favour of add_constructor
+		- add_constructor no longer does (undocumented) %s substitutions
+		- (undocumented) single_value_select() method no longer takes raw
+		  SQL fragments.
+
 0.92 Sat Apr 12 2003
 
 	New Functionality

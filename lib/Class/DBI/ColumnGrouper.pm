@@ -30,6 +30,8 @@ with this directly.
 
 use strict;
 
+use Carp;
+
 sub unique {
 	my %seen;
 	map { $seen{$_}++ ? () : $_ } @_;
@@ -76,7 +78,7 @@ sub add_group {
 	my ($self, $group, @cols) = @_;
 	$self->add_group(Primary => $cols[0])
 		if ($group eq "All" or $group eq "Essential")
-		and not $self->primary;
+		and not $self->group_cols('Primary');
 	$self->add_group(Essential => @cols)
 		if $group eq "All"
 		and !$self->essential;
@@ -125,7 +127,7 @@ This returns a list of all columns.
 
 	my $pri_col = $colg->primary;
 
-This returns the name of the primary key column.
+This returns a list of the columns in the Primary group.
 
 =head2 essential
 
@@ -135,11 +137,21 @@ This returns a list of the columns in the Essential group.
 
 =cut
 
-sub all_columns { keys %{ +shift->{_cols} } }
+sub all_columns {
+	my $self = shift;
+	return grep !$self->{_cols}->{$_}{TEMP}, keys %{ $self->{_cols} };
+}
 
 sub primary {
-	my ($primary) = shift->group_cols('Primary');
-	return $primary;
+	my @cols = shift->group_cols('Primary');
+	if (!wantarray && @cols > 1) {
+		local ($Carp::CarpLevel) = 1;
+		confess(
+			"Multiple columns in Primary group (@cols) but primary called in scalar context"
+		);
+		return $cols[0];
+	}
+	return @cols;
 }
 
 sub essential {

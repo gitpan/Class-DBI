@@ -72,8 +72,8 @@ sub wibble { shift->croak("Croak dies") }
 	eval { Holiday->has_a('new') };
 	::like $@, qr/associated class/, "has_a needs a class";
 
-	eval { Holiday->make_filter() };
-	::like $@, qr/method/, "make_filter needs a method name";
+	eval { Holiday->add_constructor() };
+	::like $@, qr/name/, "add_constructor needs a method name";
 
 	eval {
 		Holiday->add_trigger(on_setting => sub { 1 });

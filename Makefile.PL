@@ -5,7 +5,7 @@ use ExtUtils::MakeMaker;
 
 $PACKAGE = 'Class::DBI';
 ($PACKAGE_FILE) = $PACKAGE =~ /::([^:]+)/;
-$LAST_API_CHANGE = 0.91;
+$LAST_API_CHANGE = 0.93;
 
 require 5.00502;
 
@@ -19,6 +19,11 @@ version $LAST_API_CHANGE!  Please check carefully if you are upgrading
 from a version older than $LAST_API_CHANGE.
 
 Significant changes:
+
+  0.93 - Undocumented ordered_search() method no longer exists
+       - Undocumented make_filter() method no longer exists
+       - Undocumented option for add_constructor to do %s subitutions removed
+       - single_value_select() no longer takes raw SQL fragments
 
   0.91 - on_setting() trigger point replaced by new individual column
           triggers (see documentation on constraints)
@@ -55,7 +60,8 @@ WriteMakefile(
 		'Class::Data::Inheritable' => '0.02',
 		'Class::Trigger'           => '0.07',
 		'File::Temp'               => '0.12',
-		'Ima::DBI'                 => '0.28',
+		'Ima::DBI'                 => '0.29',
+		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',
   },
 	dist              => { 

@@ -14,7 +14,6 @@ INIT {
 	Film->CONSTRUCT;
 	Film->has_many(actors                => 'Actor');
 	Actor->has_a('film'                  => 'Film');
-	Actor->make_filter(between           => '%s >= ? AND %s <= ?');
 	Actor->add_constructor(double_search => 'name = ? AND salary = ?');
 }
 

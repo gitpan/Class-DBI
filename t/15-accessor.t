@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 43);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 44);
 }
 
 INIT {
@@ -140,14 +140,14 @@ is $@, '', "No errors";
 	}
 }
 
-{    # was bug with TEMP and no Essential
-	is scalar Actor->columns('Essential'), scalar Actor->columns('Primary'), 
-		"Actor has no specific essential columns";
-	Actor->columns(TEMP => qw/nonpersistent/);
+{ # was bug with TEMP and no Essential
+	is_deeply(Actor->columns('Essential'), Actor->columns('Primary'), 
+		"Actor has no specific essential columns");
 	ok(Actor->has_column('nonpersistent'), "nonpersistent is a column");
 	ok(!Actor->has_real_column('nonpersistent'), " - but it's not real");
-	my @actors = eval { Actor->retrieve_all };
+	my $pj = eval { Actor->retrieve("Peter Jackson") };
 	is $@, '', "no problems retrieving actors";
+	isa_ok $pj => "Actor";
 }
 
 

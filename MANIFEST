@@ -38,6 +38,7 @@ t/testlib/MyFilm.pm
 t/testlib/MyFoo.pm
 t/testlib/MyStar.pm
 t/testlib/MyStarLink.pm
+t/testlib/MyStarLinkMCPK.pm
 t/testlib/Order.pm
 t/testlib/OtherFilm.pm
 

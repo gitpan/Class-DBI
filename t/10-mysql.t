@@ -4,12 +4,12 @@ use strict;
 use Test::More;
 
 eval { require Date::Simple };
-plan skip_all => "Need Date::Simple for this test" if $@;
+plan skip_all => "Need Date::Simple for this test ($@)" if $@;
 
 eval { require 't/testlib/MyFoo.pm' };
-plan skip_all => "Need MySQL for this test" if $@;
+plan skip_all => "Need MySQL for this test ($@)" if $@;
 
-plan tests => 40;
+plan tests => 56;
 
 package main;
 
@@ -39,10 +39,11 @@ is MyFoo->minimum_value_of("val"), 4, "min()";
 is MyFoo->maximum_value_of("val"), 7, "max()";
 
 {
-	local $SIG{__WARN__} = sub { };
+	local $SIG{__WARN__} = sub { warn $_ for grep { !/method already exists/ } @_ };
 	require './t/testlib/MyStarLink.pm';
 	require './t/testlib/MyFilm.pm';
 	require './t/testlib/MyStar.pm';
+	require './t/testlib/MyStarLinkMCPK.pm';
 }
 
 ok(my $f1 = MyFilm->create({ title => "Veronique" }), "Create Veronique");
@@ -56,6 +57,26 @@ ok(my $l1 = MyStarLink->create({ film => $f1, star => $s1 }), "Link 1");
 ok(my $l2 = MyStarLink->create({ film => $f1, star => $s2 }), "Link 2");
 ok(my $l3 = MyStarLink->create({ film => $f2, star => $s1 }), "Link 3");
 ok(my $l4 = MyStarLink->create({ film => $f2, star => $s3 }), "Link 4");
+
+ok(my $lm1 = MyStarLinkMCPK->create({ film => $f1, star => $s1 }), "Link MCPK 1");
+ok(my $lm2 = MyStarLinkMCPK->create({ film => $f1, star => $s2 }), "Link MCPK 2");
+ok(my $lm3 = MyStarLinkMCPK->create({ film => $f2, star => $s1 }), "Link MCPK 3");
+ok(my $lm4 = MyStarLinkMCPK->create({ film => $f2, star => $s3 }), "Link MCPK 4");
+
+# try to create one with duplicate primary key
+my $lm5 = eval { MyStarLinkMCPK->create({ film => $f2, star => $s3 }) };
+ok(!$lm5, "Can't create duplicate");
+ok($@ =~ /^Can't insert .* duplicate/i, "Duplicate create caused exception" );
+
+# create one to delete
+ok(my $lm6 = MyStarLinkMCPK->create({ film => $f2, star => $s2 }), "Link MCPK 5");
+ok(my $lm7 = MyStarLinkMCPK->retrieve(film => $f2, star => $s2), "Retrieve from table");
+ok($lm7 && $lm7->delete, "Delete from table");
+ok(!MyStarLinkMCPK->retrieve(film => $f2, star => $s2), "No longer in table");
+
+# test stringify
+is "$lm1", "1/1", "stringify";
+is "$lm4", "2/3", "stringify";
 
 my $to_ids = sub { join ":", sort map $_->id, @_ };
 
@@ -86,6 +107,17 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 	ok !ref $filmid[0], "Film-id is not a reference";
 
 	my $first = $s1->filmids->first;
+	ok !ref $first, "First is not a reference";
+	is $first, $filmid[0], "But it's the same as filmid[0]";
+}
+
+{
+	ok MyStar->has_many(filmids_mcpk => [ MyStarLinkMCPK => 'film', 'id' ] => 'star'),
+		"**** Multi-map via MCPK";
+	my @filmid = $s1->filmids_mcpk;
+	ok !ref $filmid[0], "Film-id is not a reference";
+
+	my $first = $s1->filmids_mcpk->first;
 	ok !ref $first, "First is not a reference";
 	is $first, $filmid[0], "But it's the same as filmid[0]";
 }

@@ -4,7 +4,7 @@ $| = 1;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 77);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 85);
 }
 
 INIT {
@@ -14,10 +14,12 @@ INIT {
 
 ok(Film->CONSTRUCT, "Construct Film table");
 ok(Film->can('db_Main'), 'set_db()');
+is(Film->__driver, "SQLite", "Driver set correctly");
 
 {
-	my $nul = Film->retrieve();
+	my $nul = eval { Film->retrieve() };
 	is $nul, undef, "Can't retrieve nothing";
+	like $@, qr/./, "retrieve needs parameters"; # TODO fix this...
 }
 
 {
@@ -262,6 +264,20 @@ is($btaste->Director, $orig_director, 'discard_changes()');
 	$blrunner->NumExplodingSheep(2);
 	eval { $blrunner->update };
 	ok(!$@, "Other accessors");
+}
+
+# overloading
+{
+	is "$blrunner", "Bladerunner", "stringify";
+
+	ok(Film->columns(Stringify => 'rating'), "Can change stringify column");
+	is "$blrunner", "R", "And still stringifies correctly";
+
+	ok(Film->columns(Stringify => qw/title rating/), "Can have multiple stringify columns");
+	is "$blrunner", "Bladerunner/R", "And still stringifies correctly";
+
+	local *Film::stringify_self = sub { join ":", $_[0]->title, $_[0]->rating };
+	is "$blrunner", "Bladerunner:R", "Provide stringify_self()";
 }
 
 {

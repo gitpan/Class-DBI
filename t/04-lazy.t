@@ -33,7 +33,7 @@ ok(eq_set([ Lazy->columns('All') ], [qw/this that eep orp oop opop/]), "All");
 	ok eq_set(\@groups, [qw/things/]), "that (@groups)";
 }
 
-Lazy->new({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
+Lazy->create({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
 
 ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
 ok(exists $obj->{this}, "Gets primary");
@@ -59,17 +59,17 @@ ok(!exists $obj->{that}, 'nor that');
 # Test contructor breaking.
 
 eval {    # Need a hashref
-	Lazy->new(this => 10, that => 20, oop => 30, opop => 40, eep => 50);
+	Lazy->create(this => 10, that => 20, oop => 30, opop => 40, eep => 50);
 };
 ok($@, $@);
 
 eval {    # False column
-	Lazy->new({ this => 10, that => 20, theother => 30 });
+	Lazy->create({ this => 10, that => 20, theother => 30 });
 };
 ok($@, $@);
 
 eval {    # Multiple false columns
-	Lazy->new({ this => 10, that => 20, theother => 30, andanother => 40 });
+	Lazy->create({ this => 10, that => 20, theother => 30, andanother => 40 });
 };
 ok($@, $@);
 

@@ -93,7 +93,7 @@ ok(State->can('_set_Snowfall_accessor'), ' with alias');
 {
 	local $SIG{__WARN__} = sub { };
 	eval { Class::DBI->retrieve(1) };
-	like $@, qr/No database connection/, "Need a connection for queries";
+	like $@, qr/Can't retrieve unless primary columns are defined/, "Need primary key for retrieve";
 }
 
 #-----------------------------------------------------------------------
