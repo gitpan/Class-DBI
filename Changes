@@ -1,3 +1,12 @@
+0.15  Sun Jul 16 23:14:20 PDT 2000
+    - Fixed minor bug in DESTROY message.
+    * Added hasa() object relationships.
+
+0.14  Sun Jul  9 05:25:53 EDT 2000
+    - Pseudohashes as objects now work and basicly tested
+    - The rollback() mechanism changed to use less memory.
+    - Expanded the TODO list
+
 0.13  Wed May 24 02:45:43 EDT 2000
     - Accessors were not being generated properly in certain cases.
 

@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.6 2000/05/24 07:00:19 schwern Exp $
+# $Id: DBI.t,v 1.9 2000/07/17 06:21:36 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -45,13 +45,11 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 36 }
+BEGIN { $Total_tests = 48 }
 
 
 package Film;
 use base qw(Class::DBI);
-Film->columns('Essential', qw( Title ));
-Film->columns('Other',     qw( Director Rating NumExplodingSheep HasVomit ));
 
 # Test overriding.
 sub HasVomit {
@@ -64,6 +62,12 @@ sub HasVomit {
 ::ok( !Film->can('hasvomit') && !Film->can('title'),
                                                 'normalized methods bug'    );
 
+BEGIN {
+    Film->columns('Essential', qw( Title ));
+    Film->columns('Directors', qw( Director CoDirector ));
+    Film->columns('Other',     qw( Rating NumExplodingSheep HasVomit ));
+}
+
 # Tell Class::DBI a little about yourself.
 Film->table('Movies');
 ::ok( Film->table eq 'Movies',                                  'table()'   );
@@ -71,14 +75,27 @@ Film->table('Movies');
 Film->columns('Primary', 'Title');
 ::ok( ::eqarray([Film->columns('Primary')], ['title']),         'columns()' );
 
+# Find a test database to use.
 my %dbi;
 my @dbi_drivers = DBI->available_drivers;
-unless( grep { $_ eq 'CSV' } @dbi_drivers ) {
+my @drivers_we_like = grep /^CSV|RAM$/, @dbi_drivers;
+if ( grep /^CSV$/, @drivers_we_like ) {      # We like DBD::CSV
+     $dbi{'data src'}    = 'DBI:CSV:f_dir=testdb';
+     $dbi{user}          = '';
+     $dbi{password}      = '';
+}
+# DBD::RAM doesn't seem quite ready for this.
+# elsif ( grep /^RAM$/, @drivers_we_like ) {      # We like DBD::RAM, too.
+#     $dbi{'data src'}    = 'DBI:RAM:';
+#     $dbi{user}          = '';
+#     $dbi{password}      = '';
+# }
+else {
     my $old_fh = select(STDERR);
     print "\n";
     print "Class::DBI prefers DBD::CSV for testing but cannot find it.";
     print "Give me an alternate DBI data source: (",
-          join(', ', map { "dbi:$_:<mumble>" } @dbi_drivers), "):  ";
+          join(', ', map { "dbi:$_:<database name>" } @dbi_drivers), "):  ";
     $dbi{'data src'}    = <STDIN>;
     chomp $dbi{'data src'};
     print "A username to access this data source:  ";
@@ -90,11 +107,7 @@ unless( grep { $_ eq 'CSV' } @dbi_drivers ) {
 
     select($old_fh);
 }
-else {                                  # We like DBD::CSV
-    $dbi{'data src'}    = 'DBI:CSV:f_dir=testdb';
-    $dbi{user}          = '';
-    $dbi{password}      = '';
-}
+
 
 Film->set_db('Main', @{dbi}{'data src', 'user', 'password'}, 
              {AutoCommit => 1});
@@ -102,9 +115,18 @@ Film->set_db('Main', @{dbi}{'data src', 'user', 'password'},
 
 # Set up a table for ourselves.
 Film->db_Main->do(<<"SQL");
+CREATE TABLE Directors (
+        name                    VARCHAR(80),
+        birthday                INTEGER,
+        isinsane                INTEGER
+)
+SQL
+
+Film->db_Main->do(<<"SQL");
 CREATE TABLE Movies (
         title                   VARCHAR(255),
         director                VARCHAR(80),
+        codirector              VARCHAR(80),
         rating                  CHAR(5),
         numexplodingsheep       INTEGER,
         hasvomit                CHAR(1)
@@ -114,6 +136,7 @@ SQL
 # Clean up after ourselves.
 END {
     Film->db_Main->do("DROP TABLE Movies");
+    Film->db_Main->do("DROP TABLE Directors");
 }
 
 
@@ -194,6 +217,12 @@ my @films = Film->search('Rating', 'NC-17');
                 [sort map { $_->id } $blrunner_dc, $gone, $blrunner]),
                                                           'search_like()'   );
 
+# Test that a disconnect doesn't harm anything.
+Film->db_Main->disconnect;
+@films = Film->search('Rating', 'NC-17');
+::ok( @films == 1 and $films[0]->id eq $gone->id,               'auto reconnection'  );
+
+
 # Test simple subclassing.
 package Film::Threat;
 
@@ -219,6 +248,7 @@ $btaste->rollback;
 ::ok( $btaste->Director eq $orig_director,               'rollback()'     );
 
 
+# Test the laziness Class::DBI.
 package Lazy;
 
 use base qw(Class::DBI);
@@ -235,10 +265,10 @@ Lazy->db_Main->do(<<"SQL");
 CREATE TABLE Lazy (
     this INTEGER,
     that INTEGER,
-    right INTEGER,
-    left  INTEGER,
-    up    INTEGER,
-    down  INTEGER
+    eep  INTEGER,
+    orp  INTEGER,
+    oop  INTEGER,
+    opop INTEGER
 )
 SQL
 
@@ -248,23 +278,94 @@ END {
 }
 
 Lazy->columns('Primary', qw(this));
-Lazy->columns('Essential', qw(this up));
+Lazy->columns('Essential', qw(this opop));
 Lazy->columns('things', qw(this that));
-Lazy->columns('horizon', qw(right left));
-Lazy->columns('vertical', qw(up down));
+Lazy->columns('horizon', qw(eep orp));
+Lazy->columns('vertical', qw(oop opop));
 
 package main;
 
 ::ok( eqarray([sort Lazy->columns('All')], 
-              [sort qw(this that right left up down)]), 
+              [sort qw(this that eep orp oop opop)]), 
                                                  'autogen columns("All")' );
 
-Lazy->new({this => 1, that => 2, up => 3, down => 4, right => 5});
+Lazy->new({this => 1, that => 2, oop => 3, opop => 4, eep => 5});
 
 my $obj = Lazy->retrieve(1);
 
-::ok( exists $obj->{this} and exists $obj->{up} and !exists $obj->{right}
-      and !exists $obj->{down},                 'lazy' );
+::ok( exists $obj->{this} and exists $obj->{opop} and !exists $obj->{eep}
+      and !exists $obj->{oop},                 'lazy' );
 
-::ok( $obj->right == 5 );
-::ok( exists $obj->{right} and exists $obj->{left},     'proactive' );
+::ok( $obj->eep == 5 );
+::ok( exists $obj->{eep} and exists $obj->{orp},     'proactive' );
+
+
+
+
+# Test pseudohashes as objects.
+
+package More::Film;
+
+use base qw(Film);
+
+sub _init {
+    my($class) = shift;
+
+    no strict 'refs';
+
+    my($self) = [\%{$class.'::FIELDS'}];
+    
+    $self->{__Changed} = {};
+
+    return bless $self, $class;
+}
+
+::ok( More::Film->table eq 'Movies',                      'phash table()'   );
+::ok( ::eqarray([More::Film->columns('Primary')], ['title']),   
+                                                          'phash columns()' );
+::ok( More::Film->can('db_Main'),                         'phash set_db()'  );
+
+$btaste = More::Film->retrieve('Bad Taste');
+
+::ok( defined $btaste and $btaste->isa('More::Film'),    'phash new()' );
+::ok( $btaste->Title    eq 'Bad Taste',                  'phash get'   );
+
+
+package Film::Directors;
+
+use base qw(Class::DBI);
+Film::Directors->set_db('Main', @{dbi}{'data src', 'user', 'password'}, 
+                        {AutoCommit => 1});
+::ok( Film::Directors->can('db_Main'),                        'set_db()'  );
+
+Film::Directors->columns(All     => qw(Name Birthday IsInsane));
+Film::Directors->columns(Primary => 'Name');
+Film::Directors->table('Directors');
+
+::ok( Film::Directors->new({ Name       => 'Peter Jackson',
+                             Birthday   => -300000000,
+                             IsInsane   => 1
+                           }) );
+
+Film->hasa('Film::Directors' => 'Director');
+Film->hasa('Film::Directors' => 'CoDirector');
+$btaste = Film->retrieve('Bad Taste');
+
+my $pj = $btaste->Director;
+::ok( defined $pj and 
+      $pj->isa('Film::Directors') and 
+      $pj->id eq 'Peter Jackson' );
+
+# Oh no!  Its Peter Jackson's even twin, Skippy!  Born one minute after him.
+my $sj = Film::Directors->new({ Name       => 'Skippy Jackson',
+                                Birthday   => (-300000000 + 60),
+                                IsInsane   => 1
+                              });
+::ok( defined $sj and $sj->id eq 'Skippy Jackson' );
+$btaste->CoDirector($sj);
+$btaste->commit;
+::ok( $btaste->CoDirector->Name eq 'Skippy Jackson' );
+
+# Make sure they didn't interfere with each other.
+::ok( $btaste->Director->Name   eq 'Peter Jackson' );
+

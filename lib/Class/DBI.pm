@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.13 2000/05/24 06:58:27 schwern Exp $
+# $Id: DBI.pm,v 1.16 2000/07/17 06:21:36 schwern Exp $
 
 package Class::DBI;
 
@@ -7,10 +7,12 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.13';
+$VERSION = '0.15';
 
 use Carp::Assert;
-use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
+use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
+            Class::Fields::Fuxor Class::Fields);
+use Class::Fields::Attribs;
 
 use protected qw(__Changed __AutoCommit);
 
@@ -67,8 +69,8 @@ sub _safe_exists {
 
   # Tell Class::DBI a little about yourself.
   Film->table('Movies');
-  Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
-  Film->columns('Primary', 'Title');
+  Film->columns(All     => qw( Title Director Rating NumExplodingSheep ));
+  Film->columns(Primary => qw( Title ));
   Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
 
 
@@ -132,7 +134,9 @@ persistant.  More details about individual methods will follow.
 
 You must have an existing database set up, have DBI.pm installed and
 the necessary DBD:: driver module for that database.  See L<DBI> and
-the documentation of your particular database for details.
+the documentation of your particular database for details.  
+
+DBD::CSV works in a pinch.
 
 =item I<Set up a table for your objects to be stored in.>
 
@@ -167,7 +171,7 @@ match the columns in your database, one to one.  Class::DBI (via
 Class::Accessor) will use this information to determine how to create
 accessors.
 
-  Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+  Film->columns(All => qw( Title Director Rating NumExplodingSheep ));
 
 For more information about how you can more efficiently declare your columns,
 L<"Lazy Population of Columns">
@@ -186,7 +190,7 @@ will be the primary key in your database.  Class::DBI needs
 this piece of information in order to construct the proper SQL
 statements to access your stored objects.
 
-  Film->columns('Primary', 'Title');
+  Film->columns(Primary => 'Title');
 
 =item I<Declare a database connection>
 
@@ -595,6 +599,8 @@ sub commit {
   $obj->rollback;
 
 Removes any changes you've made to this object since the last commit.
+Currently this simply reloads the values from the database.  This can
+have concurrency issues.
 
 If you're using autocommit this method will throw an exception.
 
@@ -603,6 +609,7 @@ If you're using autocommit this method will throw an exception.
 #'#
 sub rollback {
     my($self) = shift;
+    my($class) = ref $self;
 
     # rollback() is useless if autocommit is on.
     if( $self->autocommit ) {
@@ -613,10 +620,34 @@ sub rollback {
     # Shortcut if there are no changes to rollback.
     return SUCCESS unless $self->is_changed;
 
-    # Stick the original values back into the object.
-    @{$self}{keys %{$self->{__Changed}}} = values %{$self->{__Changed}};
+    # Retrieve myself from the database again.
+    my $data;
+    eval {
+        my $sth = $self->sql_GetMe(join(', ', $self->is_changed),
+                                   $self->table,
+                                   $self->columns('Primary')
+                                  );
+        $sth->execute($self->id);
+        $data = $sth->fetchrow_hashref;
+        $sth->finish;
+    };
+    if ($@) {
+        $self->DBIwarn($self->id, 'GetMe');
+        return;
+    }
+    
+    unless( defined $data ) {
+        require Carp;
+        Carp::carp("rollback failed for ".$self->id." of class $class.");
+        return;
+    }
 
-    # Dump the changes.
+    # Make sure what we got from the database is what was changed.
+    assert( join('', sort keys %$data) eq
+            join('', sort $self->is_changed) ) if DEBUG;
+
+    # Throw away our changes.
+    @{$self}{keys %$data} = values %$data;
     $self->{__Changed}    = {};
 
     return SUCCESS;
@@ -627,9 +658,9 @@ sub DESTROY {
     
     if( my @changes = $self->is_changed ) {
         require Carp;
-        &Carp::carp( $self->id .' in class '. ref $self .
-                     ' destroyed without saving changes to '.
-                     join(', ', @changes) . ".\n"
+        &Carp::carp( $self->id .' in class '. ref($self) .
+                     ' destroyed without saving changes to column(s) '.
+                     join(', ', map { "'$_'" } @changes) . ".\n"
                    );
     }
 }
@@ -723,9 +754,11 @@ sub set {
 
     my $value = shift;
 
-    # Store the original value for rollback purposes.
-    $self->{__Changed}{$key} = $self->get($key) unless 
-      exists $self->{__Changed}{$key};
+    # Note the change for commit/rollback purposes.
+    # We increment instead of setting to 1 because it might be useful
+    # to someone to know how many times a value has changed between
+    # commits.
+    $self->{__Changed}{$key}++;
 
     $self->SUPER::set($key, $value);
 
@@ -874,6 +907,11 @@ sub columns {
 
         $class->normalize(\@columns);
 
+        foreach my $col (@columns) {
+            $class->add_fields(PROTECTED, $col) unless 
+              $class->is_field($col);
+        }
+
         # Group all these columns together in their group and All.
         # XXX Should this add to the group or overwrite?
         $class_columns->{$group} = { map { ($_=>1) } @columns };
@@ -977,6 +1015,116 @@ sub _get_col2group {
     return $col2group;
 }
     
+
+=pod
+
+=back
+
+=head2 Table relationships, Object relationships
+
+Often you'll want one object to contain other objects in your
+database, in the same way one table references another with foreign
+keys.  For example, say we decided we wanted to store more information
+about directors of our films.  You might set up a table...
+
+    CREATE TABLE Directors (
+        Name            VARCHAR(80),
+        Birthday        INTEGER,
+        IsInsane        BOOLEAN
+    )
+
+And put a Class::DBI subclass around it.
+
+    package Film::Directors;
+    use base qw(Class::DBI);
+
+    Film::Directors->table('Directors');
+    Film::Directors->columns(All    => qw( Name Birthday IsInsane ));
+    Film::Directors->columns(Prmary => qw( Name ));
+    Film::Directors->set_db(Main => 'dbi:mysql', 'me', 'heywoodjablowme');
+
+Now Film can use its Director column as a way of getting at
+Film::Directors objects, instead of just the director's name.  Its a
+simple matter of adding one line to Film.
+
+    # Director() is now an accessor to Film::Directors objects.
+    Film->hasa('Film::Directors', 'Director');
+
+Now the Film->Director() accessor gets and sets Film::Director objects
+instead of just their name.
+
+=over 4
+
+=item B<hasa>
+
+    Class->hasa($foreign_class, @foreign_key_columns);
+
+Declares that the given Class has a relationship with the $foreign__class
+and is storing $foreign_class's primary key informaion in the
+@foreign_key_columns.
+
+An accessor will be generated with the name of the first element in
+@foreign_key_columns.  It gets/sets objects of $foreign_class.  Using
+our Film::Director example...
+
+    # Set the director of Bad Taste to the Film::Director object
+    # representing Peter Jackson.
+    $pj     = Film::Directory->retreive('Peter Jackson');
+    $btaste = Film->retreive('Bad Taste');
+    $btaste->Director($pj);
+
+XXX I don't know if I like the way this works.  It may change a bit in
+the future.  I'm not sure about the way the accessor is named.
+
+NOTE  The two classes do not have to be in the same database!
+
+=cut
+
+#'#
+sub hasa {
+    my($class, $foreign_class, @foreign_key_cols) = @_;
+
+    assert( !grep { !$class->is_column($_) } @foreign_key_cols ) if DEBUG;
+
+    my $foreign_col_accessor = "_".$foreign_key_cols[0]."_accessor";
+
+    # This is so complicated to allow multiple columns leading to the
+    # same class.
+    my $obj_key = "__".$foreign_class."_". 
+                  join(':', @foreign_key_cols)."_Obj";
+
+    # Make sure pseudohashes know about the object key field.
+    $class->add_fields(PROTECTED, $obj_key);
+
+    my $accessor = sub {
+        my($self) = shift;
+        
+        if ( @_ ) {             # setting
+            my($obj) = shift;
+            $self->{$obj_key} = $obj;
+            
+            # XXX Have to fix this for mult-col foreign keys.
+            $self->$foreign_col_accessor($obj->id);
+        }
+        
+        unless ( defined $self->{$obj_key} ) {
+            # XXX Fix this, too.
+            my $obj_id = $self->$foreign_col_accessor();
+            $self->{$obj_key} = $foreign_class->retrieve($obj_id) if
+              defined $obj_id;
+        }
+        
+        return $self->{$obj_key};
+    };
+      
+    # This might cause a subroutine redefined warning.
+    {
+        local $^W = 0;
+        no strict 'refs';
+        *{$class."\::$foreign_key_cols[0]"} = $accessor;
+    }
+}
+
 
 =pod
 
@@ -1264,6 +1412,9 @@ Having more than one column as your primary key in the SQL table is
 currently not supported.  Why?  Its more complicated.  A later version
 will support multi-column keys.
 
+
+=head1 TODO
+
 =head2 Table/object relationships need to be handled.
 
 There's no graceful way to handle relationships between two
@@ -1275,14 +1426,26 @@ fairly simple manner.
 There's no graceful way to handle lists of things as object data.
 This is also something I plan to implement eventually.
 
+=head2 Using pseudohashes as objects has to be documented
+
+=head2 Cookbook needs to be written
+
+=head2 Object caching needs to be added
+
+=head2 Multi-column primary keys untested.
+
+If you need this feature let me know and I'll get it working.
+
+=head2 More testing with more databases.
+
+=head2 Complex data storage via Storable needed.
+
+=head2 There are concurrency problems
+
+=head2 rollback() has concurrency problems
+
 
 =head1 BUGS
-
-=head2 Untested in production.
-
-I've yet to really throw this into a production environment and shake
-out the bugs.  I will be using it in that capacity soon and it will
-firm up quickly.
 
 =head2 Only tested with DBD::CSV and MySQL
 
@@ -1296,5 +1459,7 @@ Uri Gutman and Damian Conway.
 =head1 SEE ALSO
 
 L<Ima::DBI>, L<Class::Accessor>, L<base>, L<Class::Data::Inheritable>
+http://www.pobox.com/~schwern/papers/Class-DBI/,
+Perl Object-Oriented Persistence E<lt>poop-group@lists.sourceforge.netE<gt>
 
 =cut
