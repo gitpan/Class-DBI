@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 11;
+use Test::More tests => 14;
 
 BEGIN {
   require './t/testlib/Film.pm';
@@ -50,5 +50,16 @@ my $as = Actor->create({
 
 eval { $btaste->actors($pj, $pvj, $as) };
 ok $@, $@;
-is($btaste->actors, 2, " - so we still only have 2 actors")
+is($btaste->actors, 2, " - so we still only have 2 actors");
+
+# While we're here, make sure Actors have unreadable mutators and
+# unwritable accessors
+
+eval { $as->Name("Paul Reubens") };
+ok $@, $@;
+
+eval { my $name = $as->set_Name };
+ok $@, $@;
+
+is($as->Name, 'Arnold Schwarzenegger', "Arnie's still Arnie");
 

@@ -47,12 +47,12 @@ SYNOPSIS
 
 DESCRIPTION
        I hate SQL.  You hate SQL.  We all hate SQL.  Alas, we
-       often find the need to make our objects persistant and
+       often find the need to make our objects persistent and
        like it or not an SQL database is usually the most
        flexible solution.
 
        This module is for setting up a reasonably efficient,
-       reasonably simple, reasonably extendable persistant object
+       reasonably simple, reasonably extendable persistent object
        with as little SQL and DBI knowledge as possible.
 
        Its uses a scheme to automatically set up accessors for
@@ -62,7 +62,7 @@ DESCRIPTION
        How to set it up
 
        Here's a fairly quick set of steps on how to make your
-       class persistant.  More details about individual methods
+       class persistent.  More details about individual methods
        will follow.
 
        Set up a database.

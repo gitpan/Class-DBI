@@ -1,9 +1,17 @@
+0.29  Wed Sep  5 10:24:54 BST 2001
+    + split docs into Class::DBI::Tutorial
+    + renamed is_column to has_column (is_column still provided as alias)
+    + added accessor_name and mutator_name form template methods
+    - _load_class didn't work. Now fixed.
+    - _next_in_sequence was broken, and would warn even if it wasn't.
+    - better diagnostics when you call retrieve incorrectly
+
 0.28  Wed Aug 29 20:02:28 BST 2001
     + Tony Bowden took over maintenance
     * Added hasa_list
-    + Fixed bug with inherited columns (reported by Boris Mouzykantskii)
-    + move() and copy() were broken with auto_increments. Now fixed.
-    + set() did bad things if you'd set up new fields with
+    - Fixed bug with inherited columns (reported by Boris Mouzykantskii)
+    - move() and copy() were broken with auto_increments. Now fixed.
+    - set() did bad things if you'd set up new fields with
       mk_accessors (reported by Boris Mouzykantskii). Now fixed.
     - Better errors when calling create() incorrectly
     - Split tests into distinct files (DBD::CSV now required)

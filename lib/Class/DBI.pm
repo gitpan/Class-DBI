@@ -1,14 +1,31 @@
 package Class::DBI;
 
+=head1 NAME
+
+  Class::DBI - Simple Database Abstraction
+
+=head1 SYNOPIS and DESCRIPTION
+
+The main user-guide for Class::DBI can be found in
+L<Class::DBI::Tutorial>. You should probably be reading that instead
+of this.
+
+The documention in this package provides more advanced information for
+writing more complex subclasses.
+
+=head1 METHODS
+
+=cut
+
 require 5.00502;
 
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.28';
+$VERSION = '0.29';
 
 use Carp::Assert;
-use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
+use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
             Class::Fields::Fuxor Class::Fields);
 use Class::Fields::Attribs;
 
@@ -24,286 +41,25 @@ use constant NO         => FALSE;
 sub croak { require Carp; Carp::croak(@_) }
 sub carp  { require Carp; Carp::carp(@_)  }
 
-# In perl < 5.6 exists() doesn't quite work the same on pseudohashes
-# as on regular hashes.  In order to protect ourselves we define our own
-# exists function.
-use constant PERL_VERSION => $];
-sub _safe_exists {
-    my($hash, $key) = @_;
-
-    # Because PERL_VERSION is constant this logic will
-    # be optimized away in Perl >= 5.6 and reduce to a simple
-    # statement.
-
-    # Either its 5.6 or its a hash.  Either way exists() is
-    # safe.
-    if( PERL_VERSION >= 5.006 ) {
-        return exists $hash->{$key};
-    }
-    else {
-        # We can't use ref() since that won't work on objects.
-        if( UNIVERSAL::isa($hash, 'HASH') ) {     # hash
-            return exists $hash->{$key};
-        }
-        # Older than 5.6 and its a pseudohash.  exists() will always return 
-        # true, so we use defined() instead as a cheap hack.
-        else {
-            return defined $hash->{$key};
-        }
-    }
-}
-
-=head1 NAME
-
-  Class::DBI - Simple Object Persistence
-
-=head1 SYNOPSIS
-
-  package Film;
-  use base qw(Class::DBI);
-
-  # Tell Class::DBI a little about yourself.
-  Film->table('Movies');
-  Film->columns(All => qw/Title Director Rating NumExplodingSheep/);
-
-  Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness',
-               {AutoCommit => 1});
-
-
-  #-- Meanwhile, in a nearby piece of code! --#
-  use Film;
-
-  # Create a new film entry for Bad Taste.
-  $btaste = Film->create({ Title       => 'Bad Taste',
-                           Director    => 'Peter Jackson',
-                           Rating      => 'R',
-                           NumExplodingSheep   => 1
-                         });
-
-  # Retrieve the 'Gone With The Wind' entry from the database.
-  my $gone = Film->retrieve('Gone With The Wind');
-
-  # Shocking new footage found reveals bizarre Scarlet/sheep scene!
-  $gone->NumExplodingSheep(5);
-  $gone->Rating('NC-17');
-  $gone->commit;
-
-  # Grab the 'Bladerunner' entry.
-  my $blrunner = Film->retrieve('Bladerunner');
-
-  # Make a copy of 'Bladerunner' and create an entry of the director's
-  # cut from it.
-  my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
-
-  # Ishtar doesn't deserve an entry anymore.
-  Film->retrieve('Ishtar')->delete;
-
-  # Find all films which have a rating of PG.
-  @films = Film->search('Rating', 'PG');
-
-  # Find all films which were directed by Bob
-  @films = Film->search_like('Director', 'Bob %');
-
-=head1 DESCRIPTION
-
-I hate SQL.  You hate SQL.  We all hate SQL.  Alas, we often find the
-need to make our objects persistant and like it or not an SQL database
-is usually the most flexible solution.
-
-This module is for setting up a reasonably efficient, reasonably
-simple, reasonably extendable persistant object with as little SQL and
-DBI knowledge as possible.
-
-Its uses a scheme to automatically set up accessors for each data
-field in your class.  These accessors control access to the underlying
-database.
-
-=head2 How to set it up
-
-Here's a fairly quick set of steps on how to make your class
-persistant.  More details about individual methods will follow.
-
-=over 4
-
-=item I<Set up a database.>
-
-You must have an existing database set up, have DBI.pm installed and
-the necessary DBD:: driver module for that database.  See L<DBI> and
-the documentation of your particular database for details.  
-
-DBD::CSV works in a pinch.
-
-=item I<Set up a table for your objects to be stored in.>
-
-Class::DBI works on a simple one class/one table model.  It is your
-responsibility to set up that table, automating the process would
-introduce too many complications (unless somebody wants to convince me
-otherwise).
-
-Using our Film example, you might declare a table something like this:
-
-  CREATE TABLE Movies (
-         Title      VARCHAR(255)    PRIMARY KEY,
-         Director   VARCHAR(80),
-         Rating     CHAR(5),    /* to fit at least 'NC-17' */
-         NumExplodingSheep      INTEGER
-  )
-
-=item I<Inherit from Class::DBI.>
-
-It is prefered that you use base.pm to do this rather than appending
-directly to @ISA as your class may have to inherit some protected data
-fields from Class::DBI and this is important if you're using
-pseudohashes.
-
-  package Film;
-  use base qw(Class::DBI);
-
-=item I<Declare your columns.>
-
-This can be done using columns().  The names of your fields should
-match the columns in your database, one to one.  Class::DBI (via
-Class::Accessor) will use this information to determine how to create
-accessors.
-
-  Film->columns(All => qw( Title Director Rating NumExplodingSheep ));
-
-For more information about how you can more efficiently declare your columns,
-L<"Lazy Population of Columns">
-
-=item I<Declare the name of your table>
-
-Inform Class::DBI what table you will be storing your objects
-in.  This is the table you set up eariler.
-
-  Film->table('Movies');
-
-=item I<Declare which field is your primary key>
-
-One of your fields must be a unique identifier for each object.  This
-will be the primary key in your database.  Class::DBI needs
-this piece of information in order to construct the proper SQL
-statements to access your stored objects.
-
-  Film->columns(Primary => 'Title');
-
-=item I<Declare a database connection>
-
-Class::DBI needs to know how to access the database.  It does
-this through a DBI connection which you set up.  Set up is by calling
-the set_db() method and declaring a database connection named 'Main'.
-Note that this connection MUST be called 'Main'.
-
-XXX I should probably make this even simpler.  set_db_main() or something.
-
-  Film->set_db('Main', 'dbi:mysql', 'user', 'password', {AutoCommit => 1});
-
-set_db() is inherited from Ima::DBI.  See that module's man page for
-details.
-
-=item I<Done.>
-
-All set!  You can now use the constructors (create(), copy() and
-retrieve()) destructors (delete()) and all the accessors and other
-garbage provided by Class::DBI.  Make some new objects and
-muck around a bit.  Watch the table in your database as your object
-does its thing and see things being stored, changed and deleted.
-
-=back
-
-Is it not nifty?  Worship the module.
-
-=head1 METHODS
-
-The following provided methods make the assumption that you're using
-either a hash or a pseudohash as your underlying data structure for
-your object.
-
-=head2 Life and Death - Constructors and Destructors
-
-The following are methods provided for convenience to create, retrieve
-and delete stored objects.  Its not entirely one-size fits all and you
-might find it necessary to override them.
-
-=over 4
-
-=item B<create>
-
-    $obj = Class->create(\%data);
+=head2 create
 
 This is a constructor to create a new object and store it in the
-database.  %data consists of the initial information to place in your
-object and the database.  The keys of %data match up with the columns
-of your objects and the values are the initial settings of those
-fields.
-
-$obj is an instance of Class built out of a hash reference.
-
-  # Create a new film entry for Bad Taste.
-  $btaste = Film->create({ Title       => 'Bad Taste',
-                           Director    => 'Peter Jackson',
-                           Rating      => 'R',
-                           NumExplodingSheep   => 1
-                         });
-
-If the primary column is not in %data, create() will assume it is to be
-generated.  If a sequence() has been specified for this Class, it will
-use that.  Otherwise, it will assume the primary key has an
-AUTO_INCREMENT constraint on it and attempt to use that.
-
-If the class has declared relationships with foreign classes via
-hasa(), it can pass an object to create() for the value of that key.
-Class::DBI will Do The Right Thing.
-
+database.  It calls _insert_row with the hashref, which in turn will
+call _next_in_sequence if applicable. The hasa() checks should be split
+out into another helper method.
 
 =cut
 
-__PACKAGE__->set_sql('MakeNewObj', <<"SQL", 'Main');
+__PACKAGE__->set_sql('MakeNewObj', <<'', 'Main');
 INSERT INTO %s
        (%s)
 VALUES (%s)
-SQL
-
 
 __PACKAGE__->set_sql('LastInsertID', <<'', 'Main');
 SELECT LAST_INSERT_ID()
 
-
 __PACKAGE__->set_sql('Nextval', <<'', 'Main');
 SELECT NEXTVAL ('%s')
-
-sub _next__in_sequence {
-  my $self = shift;
-  my $sth = $self->sql_Nextval($self->sequence);
-     $sth->execute;
-  return ($sth->fetchrow_array)[0];
-}
-
-sub _insert_row {
-  my $self = shift;
-  my $data = shift;
-  eval {
-    # Enter a new row into the database containing our object's information.
-    my $sth = $self->sql_MakeNewObj(
-      $self->table,
-      join(', ', keys %$data),
-      join(', ', ('?') x keys %$data)
-    );
-    $sth->execute(values %$data);
-    # If we still don't have a primary key, try AUTO_INCREMENT.
-    unless( _safe_exists($data, $self->primary) ) {
-      $sth = $self->sql_LastInsertID;
-      $sth->execute;
-      $data->{$self->primary} = ($sth->fetch)[0];
-      $sth->finish;
-    }
-  };
-  if($@) {
-    $self->DBIwarn('New', 'MakeNewObj');
-    return;
-  }
-  return 1;
-}
 
 sub create {
   my $proto = shift;
@@ -314,7 +70,7 @@ sub create {
   croak 'data to create() must be a hashref' unless ref $data eq 'HASH';
   $self->normalize_hash($data);
 
-  $self->is_column($_) or croak "$_ is not a column" foreach keys %$data;
+  $self->has_column($_) or croak "$_ is not a column" foreach keys %$data;
 
   # If a primary key wasn't given, use the sequence if we have one.
   if( $self->sequence && !_safe_exists($data, $self->primary) ) {
@@ -345,9 +101,42 @@ sub create {
   return $class->retrieve($data->{$self->primary});
 }
 
-=item B<new>
+sub _next_in_sequence {
+  my $self = shift;
+  my $sth = $self->sql_Nextval($self->sequence);
+     $sth->execute;
+  my $val = ($sth->fetchrow_array)[0];
+     $sth->finish;
+  return $val;
+}
 
-  $obj = Class->new(\%data);
+sub _insert_row {
+  my $self = shift;
+  my $data = shift;
+  eval {
+    # Enter a new row into the database containing our object's information.
+    my $sth = $self->sql_MakeNewObj(
+      $self->table,
+      join(', ', keys %$data),
+      join(', ', ('?') x keys %$data)
+    );
+    $sth->execute(values %$data);
+    # If we still don't have a primary key, try AUTO_INCREMENT.
+    unless( _safe_exists($data, $self->primary) ) {
+      $sth = $self->sql_LastInsertID;
+      $sth->execute;
+      $data->{$self->primary} = ($sth->fetch)[0];
+      $sth->finish;
+    }
+  };
+  if($@) {
+    $self->DBIwarn('New', 'MakeNewObj');
+    return;
+  }
+  return 1;
+}
+
+=head2 new
 
 This is a B<deprecated> synonym for create().  Class::DBI originally
 used new() to create new objects but it caused confusion as to whether
@@ -373,24 +162,7 @@ code in retrieve() and not new() or else Class::DBI won't use it.
 sub new   { my $proto = shift; $proto->create(@_); }
 sub _init { my $class = shift; bless { __Changed => {} }, $class; }
 
-=item B<retrieve>
-
-  $obj = Class->retrieve($id);
-
-Given an ID it will retrieve an object with that ID from the database.
-
-  my $gone = Film->retrieve('Gone With The Wind');
-
-=cut
-
-sub retrieve {
-  my $class = shift;
-  my $id = shift or return;
-  my @rows = $class->_run_search('Search', $class->primary, $id);
-  return $rows[0];
-}
-
-=item B<construct>
+=head2 construct
 
   my $obj = Class->construct(\%data);
 
@@ -426,34 +198,42 @@ sub construct {
   return $self;
 }
 
-=item B<copy>
+=head2 retrieve
 
-  $new_obj = $obj->copy;
-  $new_obj = $obj->copy($new_id);
+Given a primary key value it will retrieve an object with that ID from
+the database.  It simply calls search(), with the primary key.
 
-This creates a copy of the given $obj both in memory and in the
-database.  The only difference is that the $new_obj will have a new
-primary identifier.  $new_id will be used if provided, otherwise the
-usual sequence or autoincremented primary key will be used.
+=cut
 
-    my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
+sub retrieve {
+  my $class = shift;
+  my $id = shift or return;
+  croak "Cannot retrieve a reference" if ref($id);
+  my @rows = $class->_run_search('Search', $class->primary, $id);
+  return $rows[0];
+}
 
-=item B<move>
+=head2 copy / move
+
+  my $new_obj = $obj->copy;
+  my $new_obj = $obj->copy($new_id);
+  my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
 
   my $new_obj = Sub::Class->move($old_obj);
   my $new_obj = Sub::Class->move($old_obj, $new_id);
 
-For transfering objects from one class to another.  Similar to copy(),
-an instance of Sub::Class is created using the data in $old_obj
-(Sub::Class is a subclass of $old_obj's subclass).  Like copy(),
-$new_id is used as the primary key of $new_obj, otherwise the usual
-sequence or autoincrement is used.
+These create a copy of the given $obj both in memory and in the
+database. However, where copy() will insert the data into the
+same table, move() will insert it into the table of a subclass.
+
+If provided, $new_id will be used as the new primary key, otherwise the
+usual sequence or autoincrement will be used.
 
 =cut
 
 # Get the data, as a hash, but setting the primary key to whatever
 # we pass. Used by copy() and move()
- 
+
 sub _data_hash {
     my $self     = shift;
     my @columns  = $self->columns;
@@ -462,7 +242,7 @@ sub _data_hash {
            $data{$self->primary} = shift if @_;
     return \%data;
 }
-    
+   
 sub copy {
   my $self = shift;
   return $self->create($self->_data_hash(@_));
@@ -476,111 +256,38 @@ sub move {
   return $class->create($old_obj->_data_hash(@_));
 }
 
-=item B<delete>
+=head2 delete
 
   $obj->delete;
 
-Deletes this object from the database and from memory.  $obj is no
-longer usable after this call.
+Deletes this object from the database and from memory.  $obj is no longer
+usable after this call.
 
 =cut
 
 __PACKAGE__->set_sql('DeleteMe', <<"", 'Main');
-DELETE 
+DELETE
 FROM    %s
 WHERE   %s = ?
 
-
 sub delete {
-    my($self) = shift;
-
-    eval {
-        my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
-        $sth->execute($self->id);
-    };
-    if($@) {
-        $self->DBIwarn($self->id, 'Delete');
-        return;
-    }
-
-    undef %$self;
-    bless $self, 'Class::Deleted';
-
-    return SUCCESS;
+  my $self = shift;
+  eval {
+    my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
+    $sth->execute($self->id);
+  };
+  if($@) {
+    $self->DBIwarn($self->id, 'Delete');
+    return;
+  }
+  undef %$self;
+  bless $self, 'Class::Deleted';
+  return SUCCESS;
 }
 
-=back
+=head2 autocommit
 
-=head2 Accessors
-
-Class::DBI inherits from Class::Accessor and thus
-provides accessor methods for every column in your subclass.  It
-overrides the get() and set() methods provided by Accessor to
-automagically handle database writing.
-
-There are two modes for the accessors to work in.  Manual commit and
-autocommit.  This is sort of analagous to the manual vs autocommit in
-DBI, but is not implemented in terms of this.  What it simply means is
-this... when in autocommit mode every time one calls an accessor to
-make a change the change will immediately be written to the database.
-Otherwise, if autocommit is off, no changes will be written until
-commit() is explicitly called.
-
-This is an example of manual committing:
-
-    # The calls to NumExplodingSheep() and Rating() will only make the
-    # changes in memory, not in the database.  Once commit() is called
-    # it writes to the database in one swell foop.
-    $gone->NumExplodingSheep(5);
-    $gone->Rating('NC-17');
-    $gone->commit;
-
-And of autocommitting:
-
-    # Turn autocommitting on for this object.
-    $gone->autocommit(1);
-
-    # Each accessor call causes the new value to immediately be written.
-    $gone->NumExplodingSheep(5);
-    $gone->Rating('NC-17');
-
-Manual committing is probably more efficient than autocommiting and it
-provides the extra safety of a rollback() option to clear out all
-unsaved changes.  Autocommitting is more convient for the programmer.
-
-If changes are left uncommitted or not rolledback when the object is
-destroyed (falls out of scope or the program ends) then Class::DBI's
-DESTROY method will print a warning about unsaved changes.
-
-=over 4
-
-=item B<autocommit>
-
-    Class->autocommit($on_or_off);
-    $commit_style = Class->autocommit;
-
-    $obj->autocommit($on_or_off);
-    $commit_style = $obj->autocommit;
-
-This is an accessor to the current style of autocommitting.  When
-called with no arguments it returns the current autocommitting state,
-true for on, false for off.  When given an argument it turns
-autocommiting on and off.  A true value turns it on, a false one off.
-When called as a class method it will control the committing style for
-every instance of the class.  When called on an individual object it
-will control committing for just that object, overriding the choice
-for the class.
-
-  Class->autocommit(1);     # Autocommit is now on for the class.
-  
-  $obj = Class->retrieve('Aliens Cut My Hair');
-  $obj->autocommit(0);      # Shut off autocommitting for this object.
-
-The commit setting for an object is not stored in the database.
-
-Autocommitting is off by default.
-
-B<NOTE> This has I<nothing> to do with DBI's AutoCommit attribute.
+This is basically a wrapper around the __AutoCommit class data.
 
 =cut
 
@@ -614,13 +321,12 @@ sub autocommit {
     }
 }
 
-=item B<commit>
-
-    $obj->commit;
+=head2 commit
 
 Writes any changes you've made via accessors to disk.  There's nothing
 wrong with using commit() when autocommit is on, it'll just silently
-do nothing.
+do nothing. If the object is DESTROYed before you call commit()
+we will issue a warning.
 
 =cut
 
@@ -630,38 +336,38 @@ SET    %s
 WHERE  %s = ?
 
 sub commit {
-    my($self) = shift;
+  my $self = shift;
+  my $table = $self->table;
+  assert( defined $table ) if DEBUG;
 
-    my $table = $self->table;
-    assert( defined $table ) if DEBUG;
-
-    if( my @changed_cols = $self->is_changed ) {
-        my($primary_col) = $self->primary;
-
-        eval {
-            my $sth = $self->sql_commit($table,
-                                        join( ', ', map { "$_ = ?" } 
-                                                    @changed_cols),
-                                        $primary_col
-                                       );
-            $sth->execute((map { $self->{$_} } @changed_cols), 
-                          $self->id
-                         );
-        };
-        if($@) {
-            $self->DBIwarn( $primary_col, 'commit' );
-            return;
-        }
-
-        $self->{__Changed}  = {};
+  if (my @changed_cols = $self->is_changed) {
+    eval {
+      my $sth = $self->sql_commit($table,
+                                  join( ', ', map { "$_ = ?" } @changed_cols),
+                                  $self->primary
+      );
+      $sth->execute((map $self->{$_}, @changed_cols), $self->id);
+    };
+    if ($@) {
+      $self->DBIwarn( "Cannot commit $table");
+      return;
     }
-
-    return SUCCESS;
+    $self->{__Changed}  = {};
+  }
+  return SUCCESS;
 }
 
-=item B<rollback>
+sub DESTROY {
+    my($self) = shift;
+    if( my @changes = $self->is_changed ) {
+        carp( $self->id .' in class '. ref($self) .
+              ' destroyed without saving changes to column(s) '.
+              join(', ', map { "'$_'" } @changes) . ".\n"
+            );
+    }
+}
 
-  $obj->rollback;
+=head2 rollback
 
 Removes any changes you've made to this object since the last commit.
 Currently this simply reloads the values from the database.  This can
@@ -716,17 +422,14 @@ sub rollback {
     return SUCCESS;
 }
 
-sub DESTROY {
-    my($self) = shift;
+=head2 get
 
-    if( my @changes = $self->is_changed ) {
-        carp( $self->id .' in class '. ref($self) .
-              ' destroyed without saving changes to column(s) '.
-              join(', ', map { "'$_'" } @changes) . ".\n"
-            );
-    }
-}
+We override the get() method from Class::Accessor to fetch the data for
+the column (and associated) columns from the database, using the _flesh()
+method. We also allow get to be called with a list of keys, instead of
+just one.
 
+=cut
 
 sub get {
     my($self, @keys) = @_;
@@ -747,12 +450,12 @@ sub get {
     }
 }
 
+sub id { $_[0]->get($_[0]->primary) }
 
-__PACKAGE__->set_sql('Flesh', <<"SQL");
+__PACKAGE__->set_sql('Flesh', <<'');
 SELECT  %s
 FROM    %s
 WHERE   %s = ?
-SQL
 
 sub _flesh {
     my($self, @groups) = @_;
@@ -791,22 +494,26 @@ sub _flesh {
     return SUCCESS;
 }
 
-
 sub _cols2groups {
-    my($self, @cols) = @_;
-    
-    my %groups = ();
-    my $col2group = $self->_get_col2group;
+  my($self, @cols) = @_;
+   
+  my %groups = ();
+  my $col2group = $self->_get_col2group;
 
-    foreach my $col (@cols) {
-        foreach my $group (@{$col2group->{$col}}) {
-            $groups{$group}++;
-        }
-    }
-    
-    return grep !/^All$/, keys %groups;
+  foreach my $col (@cols) {
+    $groups{$_}++ foreach @{$col2group->{$col}};
+  }
+   
+  return grep !/^All$/, keys %groups;
 }
 
+=head2 set
+
+We also override set() from Class::Accessor so we can keep track of
+changes, and either write to the database now (if autocommit is on),
+or when commit() is called.
+
+=cut
 
 sub set {
     my($self, $key) = splice(@_, 0, 2);
@@ -820,65 +527,24 @@ sub set {
     # We increment instead of setting to 1 because it might be useful to
     # someone to know how many times a value has changed between commits.
 
-    $self->{__Changed}{$key}++ if $self->is_column($key);
+    $self->{__Changed}{$key}++ if $self->has_column($key);
     $self->SUPER::set($key, $value);
     $self->commit if $self->autocommit;
 
     return SUCCESS;
 }
 
-=item B<is_changed>
-
-  @changed_keys = $obj->is_changed;
-
-Indicates if the given $obj has uncommitted changes.  Returns a list of
-keys which have changed.
-
-=cut
-
 sub is_changed { keys %{shift->{__Changed}} }
 
-=back
+=head2 set_db
 
-=head2 Database information
+We override set_db from Ima::DBI so that we can set up some default
+attributes on a per database basis.  For instance, if MySQL is detected,
+AutoCommit will be turned on.  Under Oracle, ChopBlanks is turned on.
+As more databases are tested, more defaults will be added.
 
-=over 4
-
-=item B<set_db>
-
-  Class->set_db($db_name, $data_source, $user, $password, \%attr);
-
-For details on this method, L<Ima::DBI>.
-
-The special connection named 'Main' must always be set.  Connections
-are inherited.
-
-Its often wise to set up a "top level" class for your entire
-application to inherit from, rather than directly from Class::DBI.
-This gives you a convenient point to place system-wide overrides and
-enhancements to Class::DBI's behavior.  It also lets you set the Main
-connection in one place rather than scattering the connection info all
-over the code.
-
-  package My::Class::DBI;
-
-  use base qw(Class::DBI);
-  __PACKAGE__->set_db('Main', 'dbi:foo', 'user', 'password');
-
-
-  package My::Other::Thing;
-
-  # Instead of inheriting from Class::DBI.  We now have the Main
-  # connection all set up.
-  use base qw(My::Class::DBI);
-
-Class::DBI helps you along a bit to set up the database connection.
-set_db() normally provides its own default attributes on a per
-database basis.  For instance, if MySQL is detected, AutoCommit will
-be turned on.  Under Oracle, ChopBlanks is turned on.  As more
-databases are tested, more defaults will be added.
-
-The defaults can always be overridden by supplying your own %attr.
+The defaults can be overridden by supplying your own $attr hashref as
+the 6th argument.
 
 =cut
 
@@ -906,81 +572,9 @@ The defaults can always be overridden by supplying your own %attr.
   }
 }
 
-=item B<id>
+=head2 table / sequence
 
-  $id = $obj->id;
-
-Returns a unique identifier for this object.  Its the equivalent of
-$obj->get($self->columns('Primary'));
-
-=cut
-
-sub id {
-    my($self) = shift;
-    return $self->get($self->primary);
-}
-
-=begin _unimplemented
-
-=item B<schema>
-
-  Class->schema(\%schema_def);
-
-This is a convenience method to give a class's schema all in one shot,
-without lots of calls to columns().  It takes a single argument which
-is a hash ref representing the table schema.  This has two keys:
-table and columns.  "table" is straightforward, it works just like
-table().
-
-"columns" has a few modes of operation.  Given an array ref, it acts just
-like a call to columns('All', ...) except it assumes the first column
-is also the primary column.  So:
-
-    Class->schema({
-                   table    => 'Movies',
-                   columns  => [qw( Title Director Rating
-                                    NumExplodingSheep )],
-                  });
-
-is the same as:
-
-    Class->table('Movies');
-    Class->columns('All', qw(Title Director Rating NumExplodingSheep));
-    Class->columns('Primary', 'Title');
-
-If "columns" is given a hash ref it considers it to be like calls to
-columns($group, @cols);  So:
-
-    Class->schema({
-           table    => 'Line_Feature',
-           columns  => {
-                        Primary   => ['TLID'],
-                        Essential => [qw( TLID FeName Chain ) ],
-                        Feature   => [qw( FeDirP FeName FeType )],
-                        Zip       => [qw( ZipL Zip4L ZipR Zip4R )],
-                       }
-    });
-
-is the same as:
-
-    Class->table('Line_Feature');
-    Class->columns('Primary', 'TLID');
-    Class->columns('Essential', qw( TLID FeName Chain ));
-    Class->columns('Feature',   qw( FeDirP FeName FeType ));
-    Class->columns('Zip',       qw( ZipL Zip4L ZipR Zip4R ));
-
-=end _unimplemented
-
-=item B<table>
-
-  Class->table($table);
-  $table = Class->table;
-  $table = $obj->table;
-
-An accessor to get/set the name of the database table in which this
-class is stored.  It -must- be set.
-
-Table information is inherited by subclasses, but can be overridden.
+These are simple wrapper around the __table and __sequence class data.
 
 =cut
 
@@ -993,24 +587,6 @@ sub table {
   $class->__table(@_);
 }
 
-=item B<sequence>
-
-  Class->sequence($sequence_name);
-  $sequence_name = Class->sequence;
-  $sequence_name = $obj->sequence;
-
-An accessor to get/set the name of a sequence for the primary key.
-
-    Class->columns(Primary => 'id');
-    Class->sequence('class_id_seq');
-
-Class::DBI will use the sequence to generate primary keys when objects
-are created yet the primary key is not specified.
-
-B<NOTE>: Class::DBI also supports AUTO_INCREMENT and similar semantics.
-
-=cut
-
 __PACKAGE__->mk_classdata('__sequence');
 
 sub sequence {
@@ -1020,51 +596,22 @@ sub sequence {
   $class->__sequence(@_);
 }
 
-=item B<columns>
-
-  @all_columns  = $obj->columns;
-  @columns      = $obj->columns($group);
-  Class->columns($group, @columns);
-
-This is an accessor to the names of the database columns of a class.
-Its used to construct SQL statements to act on the class.
-
-Columns are grouped together by typical usage, this can allow more
-efficient access by loading all columns in a group at once.  For
-more information about this, L<"Lazy Population of Columns">. 
-
-There are three 'reserved' groups.  'All', 'Essential' and 'Primary'.
-
-B<'All'> are all columns used by the class.  If not set it will be
-created from all the other groups.
-
-B<'Primary'> is the single primary key column for this class.  It
-I<must> be set before objects can be used.  (Multiple primary keys
-will be supported eventually)
-
-    Class->columns('Primary', 'Title');
-
-B<'Essential'> are the minimal set of columns needed to load and use
-the object.  Only the columns in this group will be loaded when an
-object is retrieve()'d.  Its typically used so save memory on a class
-that has alot of columns but most only uses a few of them.  It will
-automatically be generated from C<Class->columns('All')> if you don't
-set it yourself.  The 'Primary' column is always part of your
-'Essential' group and Class::DBI will put it there if you don't.
-
-If 'All' is given but not 'Primary' it will assume the first column in
-'All' is the primary key.
-
-If no arguments are given it will assume you want a list of All columns.
-
-B<NOTE> I haven't decided on this method's behavior in scalar context.
-
-=cut
-
 sub _invalid_object_method {
   my ($self, $method) = @_;
   carp "$method should be called as a class method not an object method";
 }
+
+=item B<columns>
+
+Columns is a wrapper to the __columns class data, but it's much more
+complex than table() or sequence(). We provide primary() and essential()
+as simple accessors to these methods (primary currently returns a scalar,
+and essential a list).
+
+When we declare a new group of columns we create an accessors for each
+via _mk_column_accessors.
+
+=cut
 
 __PACKAGE__->mk_classdata('__columns');
 __PACKAGE__->__columns({});
@@ -1096,14 +643,14 @@ sub columns {
         }
 
         foreach my $col (@columns) {
-            $class->add_fields(PROTECTED, $col) unless 
+            $class->add_fields(PROTECTED, $col) unless
               $class->is_field($col);
         }
 
         # Group all these columns together in their group and All.
         # XXX Should this add to the group or overwrite?
         $columns{$group} = { map { ($_=>1) } @columns };
-        @{$columns{All}}{@columns} = (1) x @columns 
+        @{$columns{All}}{@columns} = (1) x @columns
           unless $group eq 'All';
 
         # Force columns() to be overriden if necessary.
@@ -1135,43 +682,82 @@ sub columns {
 }
 
 sub primary   { (shift->columns('Primary'))[0] }
-sub essential { (shift->columns('Essential'))[0] }
+sub essential { shift->columns('Essential') }
 
-sub _mk_column_accessors {
-  my($class, @col_meths) = @_;
-  my(@columns) = $class->_normalized(@col_meths);
+=head2 _mk_column_accessors
 
-  assert(@col_meths == @columns) if DEBUG;
+Make a set of accessors for each of a list of columns.  We construct
+the method name by calling accessor_name() and mutator_name() with the
+normalized column name. 
 
-  no strict 'refs';
-  for my $i (0..$#columns) {
-    my $col      = $columns[$i];
-    my $meth     = $col_meths[$i];
-    my $alias    = "_${meth}_accessor";
-    my $accessor = $class->make_accessor($col);
+mutator_name will be the same as accessor_name unless you override it.
 
-    *{"$class\::$meth"}  = $accessor unless defined &{"$class\::$meth"};
-    *{"$class\::$alias"} = $accessor unless defined &{"$class\::$alias"};
-  }
-}
-
-=item B<is_column>
-
-    Class->is_column($column);
-    $obj->is_column($column);
-
-This will return true if the given $column is a column of the class or
-object.
+If both the accessor and mutator are to have the same method name,
+(which will always be true unless you override mutator_name), a read-write
+method is constructed for it. If they differ we create both a read-only
+accessor and a write-only mutator.
 
 =cut
 
-sub is_column {
+sub _mk_column_accessors {
+  my($class, @columns) = @_;
+
+  my %norm; @norm{@columns} = $class->_normalized(@columns);
+
+  foreach my $col (@columns) {
+    my %method = (ro => $class->accessor_name($col),
+                  wo => $class->mutator_name($col));
+
+    my $both = ($method{ro} eq $method{wo});
+    foreach my $type (keys %method) {
+      my $method = $method{$type};
+      my $maker = $both ? "make_accessor" : "make_${type}_accessor";
+      my $accessor = $class->$maker($norm{$method});
+      my $alias    = "_${method}_accessor";
+      $class->_make_method($_, $accessor) for ($method, $alias);
+    }
+  }
+}
+
+sub _make_method {
+  my ($class, $name, $method) = @_;
+  no strict 'refs';
+  *{"$class\::$name"} = $method unless defined &{"$class\::$name"};
+}
+  
+sub accessor_name {
+  my ($class, $column) = @_;
+  return $column;
+}
+
+sub mutator_name {
+  my ($class, $column) = @_;
+  return $class->accessor_name($column);
+}
+
+
+=head2 has_column / is_column
+
+has_column used to be called is_column. is_column is still provided as
+an alias to it.
+
+=cut
+
+sub has_column {
   my $proto = shift;
   my $class = ref $proto || $proto;
   my $column = $class->_normalized(shift);
   my $col2group = $class->_get_col2group;
   return exists $col2group->{$column} ? scalar @{$col2group->{$column}} : 0;
 }
+
+*is_column = \&has_column;
+
+=head2 _get_col2group / _make_col2group / _flush_col2gorup
+
+We store the group => columns mappings in __Col2Group class data.
+
+=cut
 
 __PACKAGE__->mk_classdata('__Col2Group');
 
@@ -1198,75 +784,13 @@ sub _flush_col2group {
        $class->__Col2Group({});
 }
 
-=back
+=head2 hasa
 
-=head2 Table relationships, Object relationships
+When we set up a hasa() relationship we store the relevant columns
+in _hasa_columns class data. Then we make the accessor return an
+instance of the connected class, rather than the value in the table.
 
-Often you'll want one object to contain other objects in your
-database, in the same way one table references another with foreign
-keys.  For example, say we decided we wanted to store more information
-about directors of our films.  You might set up a table...
-
-    CREATE TABLE Directors (
-        Name            VARCHAR(80),
-        Birthday        INTEGER,
-        IsInsane        BOOLEAN
-    )
-
-And put a Class::DBI subclass around it.
-
-    package Film::Directors;
-    use base qw(Class::DBI);
-
-    Film::Directors->table('Directors');
-    Film::Directors->columns(All    => qw( Name Birthday IsInsane ));
-    Film::Directors->columns(Prmary => qw( Name ));
-    Film::Directors->set_db(Main => 'dbi:mysql', 'me', 'heywoodjablowme',
-                            {AutoCommit => 1});
-
-Now Film can use its Director column as a way of getting at
-Film::Directors objects, instead of just the director's name.  Its a
-simple matter of adding one line to Film.
-
-    # Director() is now an accessor to Film::Directors objects.
-    Film->hasa('Film::Directors', 'Director');
-
-Now the Film->Director() accessor gets and sets Film::Director objects
-instead of just their name.
-
-=over 4
-
-=item B<hasa>
-
-    Class->hasa($foreign_class, @foreign_key_columns);
-
-Declares that the given Class has a one-to-one or many-to-one 
-relationship with the $foreign_class and is storing $foreign_class's
-primary key information in the @foreign_key_columns.
-
-An accessor will be generated with the name of the first element in
-@foreign_key_columns.  It gets/sets objects of $foreign_class.  Using
-our Film::Director example...
-
-    # Set the director of Bad Taste to the Film::Director object
-    # representing Peter Jackson.
-    $pj     = Film::Director->retrieve('Peter Jackson');
-    $btaste = Film->retrieve('Bad Taste');
-    $btaste->Director($pj);
-
-hasa() will try to require the foreign class for you.  If the require
-fails, it will assume its not a simple require (ie. Foreign::Class
-isn't in Foreign/Class.pm) and that you've already taken care of it
-and ignore the warning.
-
-It is not necessary to call columns() to set up the
-@foreign_key_columns.  hasa() will do this for you if you haven't
-already.
-
-XXX I don't know if I like the way this works.  It may change a bit in
-the future.  I'm not sure about the way the accessor is named.
-
-NOTE  The two classes do not have to be in the same database!
+_load_class() tries to require the relevant class for us.
 
 =cut
 
@@ -1281,7 +805,7 @@ sub hasa {
 
     # This is so complicated to allow multiple columns leading to the
     # same class.
-    my $obj_key = "__".$foreign_class."_". 
+    my $obj_key = "__".$foreign_class."_".
                   join(':', @foreign_key_cols)."_Obj";
 
     # Setup the columns for this foreign class.
@@ -1291,32 +815,32 @@ sub hasa {
     $class->add_fields(PROTECTED, $obj_key);
 
     my $hasa_columns = $class->__hasa_columns || {};
-    @{$hasa_columns}{@foreign_key_cols} = 
+    @{$hasa_columns}{@foreign_key_cols} =
         ($foreign_class) x @foreign_key_cols;
 
     $class->__hasa_columns($hasa_columns);
 
     my $accessor = sub {
         my($self) = shift;
-        
+       
         if ( @_ ) {             # setting
             my($obj) = shift;
             $self->{$obj_key} = $obj;
-            
+           
             # XXX Have to fix this for mult-col foreign keys.
             $self->$foreign_col_accessor($obj->id);
         }
-        
+       
         unless ( defined $self->{$obj_key} ) {
             # XXX Fix this, too.
             my $obj_id = $self->$foreign_col_accessor();
             $self->{$obj_key} = $foreign_class->retrieve($obj_id) if
               defined $obj_id;
         }
-        
+       
         return $self->{$obj_key};
     };
-      
+     
     # This might cause a subroutine redefined warning.
     {
         local $^W = 0;
@@ -1325,9 +849,8 @@ sub hasa {
     }
 }
 
-
 sub _load_class {
-    my($foreign_class) = shift;
+    my ($self, $foreign_class) = @_;
 
     no strict 'refs';
 
@@ -1349,49 +872,8 @@ sub _load_class {
 
 =item B<hasa_list>
 
-  Class->hasa_list($foreign_class, \@foreign_keys, $accessor_name);
-
-Declares that the given Class has a one-to-many relationship with the
-$foreign_class.  Class's primary key is stored in @foreign_key columns
-in the $foreign_class->table.  An accessor will be generated with the
-given $accessor_name and it returns a list of objects related to the
-Class.
-
-Ok, confusing.  Its like this...
-
-    CREATE TABLE Actors (
-        Name            CHAR(40),
-        Film            VARCHAR(255)    REFERENCES Movies,
-
-        # Its sad that the average salary won't fit into an integer.
-        Salary          BIG INTEGER UNSIGNED
-    );
-
-with a subclass around it.
-
-    package Film::Actors;
-    use base qw(Class::DBI);
-
-    Film::Actors->table('Actors');
-    Film::Actors->columns(All   => qw(Name Film Salary));
-    Film::Actors->set_db(...);
-
-Any film is going to have lots of actors.  You'd declare this
-relationship like so:
-
-    Film->hasa_list('Film::Actors', ['Film'], 'overpaid_gits');
-
-Declars that a Film has many Film::Actors associated with it.  These
-are stored in the Actors table (gotten from Film::Actors->table) with
-the column Film containing Film's primary key.  This is accessed via
-the method 'overpaid_gits()'.
-
-    my @actors = $film->overpaid_gits;
-
-This basically does a "'SELECT * FROM Actors WHERE Film = '.$film->id"
-turning them into objects and returning.
-
-The accessor is currently read-only.
+This creates a new (read-only) accessor method which will return a
+instances of the foreign class.
 
 =cut
 
@@ -1417,49 +899,13 @@ sub hasa_list {
     }
 }
 
-=back
+=item B<normalize>
 
-=head2 Lazy Population of Columns
-
-In the tradition of Perl, Class::DBI is lazy about how it loads your
-objects.  Often, you find yourself using only a small number of the
-available columns and it would be a waste of memory to load all of
-them just to get at two, especially if you're dealing with large
-numbers of objects simultaneously.
-
-Class::DBI will load a group of columns together.  You access one
-column in the group, and it will load them all on the assumption that
-if you use one you're probably going to use the rest.  So for example,
-say we wanted to add NetProfit and GrossProfit to our Film class.
-You're probably going to use them together, so...
-
-    Film->columns('Profit', qw(NetProfit GrossProfit));
-
-Now when you say:
-
-    $net = $film->NetProfit;
-
-Class::DBI will load both NetProfit and GrossProfit from the database.
-If you then call GrossProfit() on that same object it will not have to
-hit the database.  This can potentially increase performance (YMMV).
-
-
-If you don't like this behavior, just create a group called 'All' and
-stick all your columns into it.  Then Class::DBI will load everything
-at once.
-
-
-=head2 Data Normalization
+  $obj->normalize(\@columns);
 
 SQL is largely case insensitive.  Perl is largely not.  This can lead
 to problems when reading information out of a database.  Class::DBI
 does some data normalization.
-
-=over 4
-
-=item B<normalize>
-
-  $obj->normalize(\@columns);
 
 There is no guarantee how a database will muck with the case of
 columns, so to protect against things like DBI->fetchrow_hashref()
@@ -1505,7 +951,7 @@ sub normalize_hash {
 
     @normal_cols = @cols = keys %$hash;
     $self->normalize(\@normal_cols);
-    
+   
     assert(@normal_cols == @cols) if DEBUG;
 
     @{$hash}{@normal_cols} = delete @{$hash}{@cols};
@@ -1513,43 +959,12 @@ sub normalize_hash {
     return SUCCESS;
 }
 
-=back
+=head2 set_sql
 
-=head2 Defining SQL statements
-
-Class::DBI inherits from Ima::DBI and prefers to use that class's
-style of dealing with databases and DBI.  (Now is a good time to skim
-Ima::DBI's man page).
-
-In order to write new methods which are inheritable by your subclasses
-you must be careful not to hardcode any information about your class's
-table name or primary key.  However, it is more efficient to use
-set_sql() to generate cached statement handles.
-
-Generally, a call to set_sql() looks something like this:
-
-    # Define sql_GetFooBar()
-    Class->set_sql('GetFooBar', <<'SQL');
-    SELECT %s
-    FROM   %s
-    WHERE  Foo = ? AND Bar = ?
-
-This generates a method called sql_GetFooBar().  Any arguments given
-are used fill in your SQL statement via sprintf().
-
-    my $sth = Class->sql_GetFooBar(join(', ', Class->columns('Essential')),
-                                   Class->table);
-
-You must be careful not to hardcode information about your class's
-table name or primary key column in your statement and instead use
-the table() and columns() methods instead.
-
-If $db_name is omitted it will assume you are using the 'Main'
-connection.
+We override set_sql() from Ima::DBI so it has a default database connection.
 
 =cut
 
-# Override set_sql() so it has a default database connection.
 sub set_sql {
     my($class, $name, $sql, $db) = @_;
     $db = 'Main' unless defined $db;
@@ -1557,56 +972,11 @@ sub set_sql {
     $class->SUPER::set_sql($name, $sql, $db);
 }
 
-=head2 Transactions
+=head2 dbi_commit / dbi_rollback
 
-Class::DBI is just now becoming dimly aware of transactions as people
-are starting to use it with PostgreSQL and Oracle.  Class::DBI
-currently works best with DBI's AutoCommit turned on, however I am
-working on making it seemless when AutoCommit is off.
-
-When using transactions with Class::DBI you must be careful to
-remember two things...
-
-=over 4
-
-=item 1
-
-Your database handles are B<shared> with possibly many other totally
-unrelated classes.  This means if you commit one class's handle you
-might actually be committing another class's transaction as well.
-
-=item 2
-
-A single class might have many database handles.  Even worse, if
-you're working with a subclass it might have handles you're not aware
-of!
-
-=back
-
-At the moment, all I can say about #1 is keep the scope of your
-transactions small, preferably down to the scope of a single method.
-I am working on a system to remove this problem.
-
-For #2 we offer the following...
-
-=over 4
-
-=item B<dbi_commit>
-
-  my $rv = Class->dbi_commit;
-  my $rv = Class->dbi_commit(@db_names);
-
-This commits the underlying handles associated with the Class.  If any
-of the commits fail, it returns false.  Otherwise true.
-
-If @db_names is not given it will commit all the database handles
-associated with this class, otherwise it will only commit those
-handles named (like 'Main' for instance).
-
-This is different than commit() so we call it dbi_commit() to
-disambiguate.
-
-This is an alias to Ima::DBI->commit().
+Simple aliases to commit() and rollback() in DBI, given different
+names to distinguish them from the Class::DBI concepts of commit()
+and rollback().
 
 =cut
 
@@ -1615,81 +985,18 @@ sub dbi_commit {
     $proto->SUPER::commit(@db_names);
 }
 
-=item B<dbi_rollback>
-
-  Class->dbi_rollback;
-  Class->dbi_rollback(@db_names);
-
-Like dbi_commit() above, this rollsback all the database handles
-associated with the Class.
-
-This is an alias to Ima::DBI->rollback().
-
-=cut
-
 sub dbi_rollback {
     my($proto, @db_names) = @_;
     $proto->SUPER::rollback(@db_names);
 }
 
-=back
 
-So how might you use this?  At the moment, something like this...
+=head2 search / search_like
 
-  eval {
-      # Change a bunch of things in memory
-      $obj->foo('bar');
-      $obj->this('that');
-      $obj->price(1456);
-
-      # Write them to the database.
-      $obj->commit;
-  };
-  if($@) {
-      # Ack!  Something went wrong!  Warn, rollback the transaction
-      # and flush out the object in memory as it may be in an odd state.
-      $obj->DBIwarn($obj->id, 'update price');
-      $obj->dbi_rollback;
-      $obj->rollback;
-  }
-  else {
-      # Everything's hoopy, commit the transaction.
-      $obj->dbi_commit;
-  }
-
-Kinda clunky, but servicable.  As I said, better things are on the way.
-
-=head2 Searching
-
-We provide a few simple search methods, more to show the potential of
-the class than to be serious search methods.
-
-=over 4
-
-=item B<search>
-
-  @objs = Class->search($key, $value);
-  @objs = $obj->search($key, $value);
-
-This is a simple search through the stored objects for all objects
-whose $key has the given $value.
-
-    @films = Film->search('Rating', 'PG');
-
-=item B<search_like>
-
-  @objs = Class->search_like($key, $like_pattern);
-  @objs = $obj->search_like($key, $like_pattern);
-
-A simple search for objects whose $key matches the $like_pattern
-given.  $like_pattern is a pattern given in SQL LIKE predicate syntax.
-'%' means "any one or more characters", '_' means "any single
-character".
-
-XXX Should I offer glob-style * and ? instead of % and _?
-
-    # Search for movies directed by guys named Bob.
-    @films = Film->search_like('Director', 'Bob %');
+Simple search mechanism. This is currently through a series of helper
+methods that will undoubtedly change in future releases as we abstract
+the whole SQL concept further. Don't rely on any of the private methods
+here.
 
 =cut
 
@@ -1724,7 +1031,7 @@ sub _run_search {
   my $SQL = shift;
      croak "Not enough arguments to search()" unless @_ == 2;
   my $key = $class->_normalized(shift);
-     croak "$key is not a column" unless $class->is_column($key);
+     croak "$key is not a column" unless $class->has_column($key);
   my $val = shift;
   my $sth = $class->_run_query($SQL, [$key], [$val]) or return;
   return map $class->construct($_), $sth->fetchall_hash;
@@ -1733,7 +1040,7 @@ sub _run_search {
 sub _run_query {
   my $class = shift;
   my ($type, $keys, $vals, $columns) = @_;
-  $columns ||= [ $class->columns('Essential') ];
+  $columns ||= [ $class->essential ];
   my $sth;
   eval {
     my $sql_method = "sql_$type";
@@ -1751,106 +1058,32 @@ sub _run_query {
   return $sth;
 }
 
-=head1 EXAMPLES
-
-Ummm... well, there's the SYNOPSIS.
-
-We need more examples.  They'll come.
-
-=head1 CAVEATS
-
-=head2 Class::DBI and mod_perl
-
-Class::DBI was first designed for a system running under FastCGI,
-which is basically a slimmer version of mod_perl.  As such, it deals
-with both just fine, or any other persistent environment, and takes
-advantage of it by caching database and statement handles as well as
-some limited object data caching.
-
-In short, there's no problem with using Class::DBI under mod_perl.  In
-fact, it'll run better.
-
-=head2 Only simple scalar values can be stored
-
-SQL sucks in that lists are really complicated to store and hashes
-practically require a whole new table.  Don't even start about
-anything more complicated.  If you want to store a list you're going
-to have to write the accessors for it yourself (although I plan to
-prove ways to handle this soon).  If you want to store a hash you
-should probably consider making a new table and a new class.
-
-Someone might be able to convince me to build accessors which
-automagically serialize data.
-
-=head2 One table, one class
-
-For every class you define one table.  Classes cannot be spread over
-more than one table, this is too much of a headache to deal with.
-
-Eventually I'll ease this restriction for link tables and tables
-representing lists of data.
-
-=head2 Single column primary keys only
-
-Having more than one column as your primary key in the SQL table is
-currently not supported.  Why?  Its more complicated.  A later version
-will support multi-column keys.
-
-=head1 TODO
-
-=head2 Table/object relationships need to be handled.
-
-There's no graceful way to handle relationships between two
-tables/objects.  I plan to eventually support these relationships in a
-fairly simple manner.
-
-=head2 Lists are poorly supported
-
-hasa_list() is a start, but I think the hasa() concept is weak.
-
-=head2 Using pseudohashes as objects has to be documented
-
-=head2 Cookbook needs to be written
-
-=head2 Object caching needs to be added
-
-=head2 Multi-column primary keys
-
-If you need this feature let me know and I'll get it working.
-
-=head2 More testing with more databases.
-
-=head2 Complex data storage via Storable needed.
-
-=head2 There are concurrency problems
-
-=head2 rollback() has concurrency problems
-
-=head2 Transactions yet to be completely implemented
-
-dbi_commit() is a start, but not done.
-
-=head2 Make all internal statements use fully-qualified columns
-
-=head1 BUGS and CAVEATS
-
-Altering the primary key column currently causes Bad Things to happen.
-
-=head2 Tested with...
-
-DBD::mysql - MySQL 3.22 and 3.23
-
-DBD::Pg - PostgreSQL 7.0
-
-DBD::CSV
-
-=head2 Reports it works with...
-
-DBD::Oracle (patches still coming in)
-
-=head2 Known not to work with...
-
-DBD::RAM
+# In perl < 5.6 exists() doesn't quite work the same on pseudohashes
+# as on regular hashes.  In order to protect ourselves we define our own
+# exists function.
+use constant PERL_VERSION => $];
+sub _safe_exists {
+    my($hash, $key) = @_;
+    # Because PERL_VERSION is constant this logic will
+    # be optimized away in Perl >= 5.6 and reduce to a simple
+    # statement.
+    # Either its 5.6 or its a hash.  Either way exists() is
+    # safe.
+    if( PERL_VERSION >= 5.006 ) {
+        return exists $hash->{$key};
+    }
+    else {
+        # We can't use ref() since that won't work on objects.
+        if( UNIVERSAL::isa($hash, 'HASH') ) {     # hash
+            return exists $hash->{$key};
+        }
+        # Older than 5.6 and its a pseudohash.  exists() will always return
+        # true, so we use defined() instead as a cheap hack.
+        else {
+            return defined $hash->{$key};
+        }
+    }
+}
 
 =head1 AUTHOR
 
@@ -1859,11 +1092,9 @@ Uri Gutman, Damian Conway, Mike Lambert and the POOP group.
 
 Now developed and maintained by Tony Bowden <kasei@tmtm.com>
 
-=head1 SEE ALSO
+=head1 LICENSE
 
-L<Ima::DBI>, L<Class::Accessor>, L<base>, L<Class::Data::Inheritable>
-http://www.pobox.com/~schwern/papers/Class-DBI/,
-Perl Object-Oriented Persistence E<lt>poop-group@lists.sourceforge.netE<gt>,
-L<Alzabo> and L<Tangram>
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
 
 =cut

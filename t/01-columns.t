@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 9;
+use Test::More tests => 16;
 
 #-------------------------------------------------------------------------
 package State;
@@ -11,6 +11,11 @@ State->columns('Primary',   'Name');
 State->columns('Essential', qw( Name Abbreviation ));
 State->columns('Weather',   qw( Rain Snowfall ));
 State->columns('Other',     qw( Capital Population ));
+
+sub mutator_name { 
+  my ($class, $column) = @_;
+  return "set_$column";
+}
 
 sub Snowfall { 1 }
 
@@ -26,8 +31,17 @@ ok( eq_array([sort State->columns('All')],
 ok( State->is_column('Rain'),         'is_column(), true' );
 ok( State->is_column('rain'),         'is_column(), true, case insensitive' );
 ok( !State->is_column('HGLAGAGlAG'),   'is_column(), false');
-ok( State->can('_Rain_accessor'), '_accessor');
-ok( State->can('_Snowfall_accessor'), '_accessor when override');
-ok( !State->can('name') && !State->can('snowfall'), 'no normalized methods' );
+
+ok( State->can('Rain'),               'accessor set up');
+ok( State->can('_Rain_accessor'),     ' with alias');
+ok( !State->can('rain'),              ' (not normalized)');
+ok( State->can('set_Rain'),           'overriden mutator');
+ok( State->can('_set_Rain_accessor'), ' with alias');
+
+ok( State->can('Snowfall'),               'overridden accessor set up');
+ok( State->can('_Snowfall_accessor'),     ' with alias');
+ok( !State->can('snowfall'),              ' (not normalized)');
+ok( State->can('set_Snowfall'),           'overriden mutator');
+ok( State->can('_set_Snowfall_accessor'), ' with alias');
 
 
