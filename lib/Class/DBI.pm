@@ -1,5 +1,3 @@
-# $Id: DBI.pm,v 1.29 2001/04/23 09:08:43 schwern Exp $
-
 package Class::DBI;
 
 require 5.00502;
@@ -7,7 +5,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.27';
+$VERSION = '0.28';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -23,6 +21,8 @@ use constant FAILURE    => FALSE;
 use constant YES        => TRUE;
 use constant NO         => FALSE;
 
+sub croak { require Carp; Carp::croak(@_) }
+sub carp  { require Carp; Carp::carp(@_)  }
 
 # In perl < 5.6 exists() doesn't quite work the same on pseudohashes
 # as on regular hashes.  In order to protect ourselves we define our own
@@ -53,13 +53,9 @@ sub _safe_exists {
     }
 }
 
-
-=pod
-
 =head1 NAME
 
   Class::DBI - Simple Object Persistence
-
 
 =head1 SYNOPSIS
 
@@ -68,7 +64,7 @@ sub _safe_exists {
 
   # Tell Class::DBI a little about yourself.
   Film->table('Movies');
-  Film->columns(All     => qw( Title Director Rating NumExplodingSheep));
+  Film->columns(All => qw/Title Director Rating NumExplodingSheep/);
 
   Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness',
                {AutoCommit => 1});
@@ -107,7 +103,6 @@ sub _safe_exists {
 
   # Find all films which were directed by Bob
   @films = Film->search_like('Director', 'Bob %');
-
 
 =head1 DESCRIPTION
 
@@ -197,17 +192,18 @@ statements to access your stored objects.
 Class::DBI needs to know how to access the database.  It does
 this through a DBI connection which you set up.  Set up is by calling
 the set_db() method and declaring a database connection named 'Main'.
+Note that this connection MUST be called 'Main'.
+
+XXX I should probably make this even simpler.  set_db_main() or something.
 
   Film->set_db('Main', 'dbi:mysql', 'user', 'password', {AutoCommit => 1});
 
 set_db() is inherited from Ima::DBI.  See that module's man page for
 details.
 
-XXX I should probably make this even simpler.  set_db_main() or something.
-
 =item I<Done.>
 
-All set!  You can now use the constructors (new(), copy() and
+All set!  You can now use the constructors (create(), copy() and
 retrieve()) destructors (delete()) and all the accessors and other
 garbage provided by Class::DBI.  Make some new objects and
 muck around a bit.  Watch the table in your database as your object
@@ -216,7 +212,6 @@ does its thing and see things being stored, changed and deleted.
 =back
 
 Is it not nifty?  Worship the module.
-
 
 =head1 METHODS
 
@@ -251,13 +246,13 @@ $obj is an instance of Class built out of a hash reference.
                            NumExplodingSheep   => 1
                          });
 
-If the primary column is not in %data, new() will assume it is to be
+If the primary column is not in %data, create() will assume it is to be
 generated.  If a sequence() has been specified for this Class, it will
 use that.  Otherwise, it will assume the primary key has an
 AUTO_INCREMENT constraint on it and attempt to use that.
 
 If the class has declared relationships with foreign classes via
-hasa(), it can pass an object to new() for the value of that key.
+hasa(), it can pass an object to create() for the value of that key.
 Class::DBI will Do The Right Thing.
 
 
@@ -277,93 +272,78 @@ SELECT LAST_INSERT_ID()
 __PACKAGE__->set_sql('Nextval', <<'', 'Main');
 SELECT NEXTVAL ('%s')
 
+sub _next__in_sequence {
+  my $self = shift;
+  my $sth = $self->sql_Nextval($self->sequence);
+     $sth->execute;
+  return ($sth->fetchrow_array)[0];
+}
+
+sub _insert_row {
+  my $self = shift;
+  my $data = shift;
+  eval {
+    # Enter a new row into the database containing our object's information.
+    my $sth = $self->sql_MakeNewObj(
+      $self->table,
+      join(', ', keys %$data),
+      join(', ', ('?') x keys %$data)
+    );
+    $sth->execute(values %$data);
+    # If we still don't have a primary key, try AUTO_INCREMENT.
+    unless( _safe_exists($data, $self->primary) ) {
+      $sth = $self->sql_LastInsertID;
+      $sth->execute;
+      $data->{$self->primary} = ($sth->fetch)[0];
+      $sth->finish;
+    }
+  };
+  if($@) {
+    $self->DBIwarn('New', 'MakeNewObj');
+    return;
+  }
+  return 1;
+}
 
 sub create {
-    my($proto, $data) = @_;
-    my($class) = ref $proto || $proto;
+  my $proto = shift;
+  my $class = ref $proto || $proto;
+  my $table = $class->table or croak "Can't create without a table";
+  my $self  = $class->_init;
+  my $data  = shift;
+  croak 'data to create() must be a hashref' unless ref $data eq 'HASH';
+  $self->normalize_hash($data);
 
-    my $self = $class->_init;
-    my($primary_col) = $self->columns('Primary');
+  $self->is_column($_) or croak "$_ is not a column" foreach keys %$data;
 
-    $self->normalize_hash($data);
+  # If a primary key wasn't given, use the sequence if we have one.
+  if( $self->sequence && !_safe_exists($data, $self->primary) ) {
+    $data->{$self->primary} = $self->_next_in_sequence;
+  }
 
-    # There shouldn't be more input than we have columns for.
-    assert($self->columns >= keys %$data) if DEBUG;
+  # Look for values which can be objects.
+  my $hasa_cols = $class->__hasa_columns || {};
+  $class->normalize_hash($hasa_cols);
 
-    # Everything in %data should be a column.
-    assert( !grep { !$self->is_column($_) } keys %$data ) if DEBUG;
-
-    # You -must- have a table defined.
-    assert( $self->table ) if DEBUG;
-
-    # If a primary key wasn't given, use the sequence if we have one.
-    if( $self->sequence && !_safe_exists($data, $primary_col) ) {
-        my $sth = $self->sql_Nextval($self->sequence);        
-        $sth->execute;
-        $data->{$primary_col} = ($sth->fetchrow_array)[0];
+  # For each column which can be an object (ie. hasa() was set) see if
+  # we were given an object and replace it with its id().
+  while( my($col, $want_class) = each %$hasa_cols) {
+    if (_safe_exists($data, $col) && ref $data->{$col}) {
+      my $obj = $data->{$col};
+      unless( $obj->isa($want_class) ) {
+        croak sprintf
+          "$class expects an object of class $want_class for $col.  Got %s.",
+           $obj->isa($want_class);
+      }
+      $data->{$col} = $obj->id;
     }
+  }
 
-    # Look for values which can be objects.
-    my $hasa_cols = $class->__hasa_columns || {};
-    $class->normalize_hash($hasa_cols);
+  $self->_insert_row($data) or return;
 
-    # For each column which can be an object (ie. hasa() was set) see if
-    # we were given an object and replace it with its id().
-    while( my($col, $want_class) = each %$hasa_cols) {
-        if( _safe_exists($data, $col) && ref $data->{$col} ) {
-            my $obj = $data->{$col};
-            unless( $obj->isa($want_class) ) {
-                require Carp;
-                Carp::croak(sprintf <<CARP, $obj->isa($want_class));
-$class expects an object of class $want_class for $col.  Got %s.
-CARP
-
-            }
-
-            $data->{$col} = $obj->id;
-        }
-    }
-        
-
-    eval {
-        # Enter a new row into the database containing our object's
-        # information.
-        my $sth = $self->sql_MakeNewObj($self->table,
-                                        join(', ', keys %$data),
-                                        join(', ', ('?') x keys %$data)
-                                       );
-        $sth->execute(values %$data);
-
-        # If we still don't have a primary key, try AUTO_INCREMENT.
-        unless( _safe_exists($data, $primary_col) ) {
-            $sth = $self->sql_LastInsertID;
-            $sth->execute;
-            $data->{$primary_col} = ($sth->fetch)[0];
-            $sth->finish;
-        }
-    };
-    if($@) {
-        $self->DBIwarn('New', 'MakeNewObj');
-        return;
-    }
-
-    # Create our object by ID because the database may have filled out
-    # alot of default rows that we don't know about yet.
-    $self = $class->retrieve($data->{$primary_col});
-
-    return $self;
+  # Fetch ourselves back from the database, in case of defaults etc.
+  return $class->retrieve($data->{$self->primary});
 }
-
-sub _init {
-    my($class) = shift;
-    my($self) = {};
-
-    $self->{__Changed} = {};
-
-    return bless $self, $class;
-}
-
-=pod
 
 =item B<new>
 
@@ -390,10 +370,8 @@ code in retrieve() and not new() or else Class::DBI won't use it.
 
 =cut
 
-sub new {
-  my($proto) = shift;
-  $proto->create(@_);
-}
+sub new   { my $proto = shift; $proto->create(@_); }
+sub _init { my $class = shift; bless { __Changed => {} }, $class; }
 
 =item B<retrieve>
 
@@ -405,38 +383,12 @@ Given an ID it will retrieve an object with that ID from the database.
 
 =cut
 
-__PACKAGE__->set_sql('GetMe', <<"", 'Main');
-SELECT %s
-FROM   %s
-WHERE  %s = ?
-
-
 sub retrieve {
-    my($proto, $id) = @_;
-    my($class) = ref $proto || $proto;
-
-    my($id_col) = $class->columns('Primary');
-
-    my $data;
-    eval {
-        my $sth = $class->sql_GetMe(join(', ', $class->columns('Essential')),
-                                    $class->table,
-                                    $class->columns('Primary')
-                                   );
-        $sth->execute($id);
-        $data = $sth->fetchrow_hashref;
-        $sth->finish;
-    };
-    if ($@) {
-        $class->DBIwarn($id, 'GetMe');
-        return;
-    }
-
-    return unless defined $data;
-    
-    return $class->construct($data);
+  my $class = shift;
+  my $id = shift or return;
+  my @rows = $class->_run_search('Search', $class->primary, $id);
+  return $rows[0];
 }
-
 
 =item B<construct>
 
@@ -462,29 +414,17 @@ the Class::DBI paper.
 
 =cut
 
-#'#
-
 sub construct {
-    my($proto, $data) = @_;
-    my($class) = ref $proto || $proto;
+  my ($proto, $data) = @_;
+  my $class = ref $proto || $proto;
+  croak("construct() is a protected method of Class::DBI!")
+    unless caller->isa("Class::DBI");
 
-    unless( caller->isa("Class::DBI") ) {
-        require Carp;
-        Carp::croak("construct() is a protected method of Class::DBI!");
-    }
-
-    my @columns = keys %$data;
-    $class->normalize(\@columns);
-
-    my $self = $class->_init;
-    @{$self}{@columns} = values %$data;
-
-    return $self;
+  my @columns = $class->_normalized(keys %$data);
+  my $self = $class->_init;
+  @{$self}{@columns} = values %$data;
+  return $self;
 }
-
-
-
-=pod
 
 =item B<copy>
 
@@ -497,23 +437,6 @@ primary identifier.  $new_id will be used if provided, otherwise the
 usual sequence or autoincremented primary key will be used.
 
     my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
-
-=cut
-
-sub copy {
-    my($self) = shift;
-
-    my($primary_col) = $self->columns('Primary');
-    my @columns      = $self->columns;
-    my %data = map { ($_ => $self->get($_) ) } @columns;
-
-    if( @_ ) {
-        $data{$primary_col} = shift;
-    }
-
-    return $self->create(\%data);
-}
-
 
 =item B<move>
 
@@ -528,32 +451,30 @@ sequence or autoincrement is used.
 
 =cut
 
-#'#
-sub move {
-    my($class, $old_obj, $new_id) = @_;
-
-    # Make sure the thing being moved and the class being moved to
-    # are related.
-    assert( $class->isa(ref $old_obj) || $old_obj->isa($class) ) if DEBUG;
-
-    my($primary_col) = $old_obj->columns('Primary');
-    my @columns      = $old_obj->columns;
-
-    assert( $primary_col eq ($class->columns('Primary'))[0] ) if DEBUG;
-    # XXX Should probably check to see if all the columns
-    # XXX are there.
-
-    my %data = map { ($_ => $old_obj->get($_) ) } @columns;
-
-    if( @_ == 3 ) {
-        $data{$primary_col} = $new_id;
-    }
-
-    return $class->create(\%data);
+# Get the data, as a hash, but setting the primary key to whatever
+# we pass. Used by copy() and move()
+ 
+sub _data_hash {
+    my $self     = shift;
+    my @columns  = $self->columns;
+    my %data; @data{@columns} = $self->get(@columns);
+    delete $data{$self->primary};
+           $data{$self->primary} = shift if @_;
+    return \%data;
+}
+    
+sub copy {
+  my $self = shift;
+  return $self->create($self->_data_hash(@_));
 }
 
-
-=pod
+sub move {
+  my $class = shift;
+  my $old_obj = shift;
+  croak "You can only move to a related class"
+    unless $class->isa(ref $old_obj) or $old_obj->isa($class);
+  return $class->create($old_obj->_data_hash(@_));
+}
 
 =item B<delete>
 
@@ -587,8 +508,6 @@ sub delete {
 
     return SUCCESS;
 }
-
-=pod
 
 =back
 
@@ -665,7 +584,6 @@ B<NOTE> This has I<nothing> to do with DBI's AutoCommit attribute.
 
 =cut
 
-#'#
 __PACKAGE__->mk_classdata('__AutoCommit');
 
 # I don't really like how this method is written.
@@ -696,8 +614,6 @@ sub autocommit {
     }
 }
 
-=pod
-
 =item B<commit>
 
     $obj->commit;
@@ -708,7 +624,6 @@ do nothing.
 
 =cut
 
-#'#
 __PACKAGE__->set_sql('commit', <<"", 'Main');
 UPDATE %s
 SET    %s
@@ -721,7 +636,7 @@ sub commit {
     assert( defined $table ) if DEBUG;
 
     if( my @changed_cols = $self->is_changed ) {
-        my($primary_col) = $self->columns('Primary');
+        my($primary_col) = $self->primary;
 
         eval {
             my $sth = $self->sql_commit($table,
@@ -744,8 +659,6 @@ sub commit {
     return SUCCESS;
 }
 
-=pod
-
 =item B<rollback>
 
   $obj->rollback;
@@ -758,16 +671,13 @@ If you're using autocommit this method will throw an exception.
 
 =cut
 
-#'#
 sub rollback {
     my($self) = shift;
     my($class) = ref $self;
 
     # rollback() is useless if autocommit is on.
-    if( $self->autocommit ) {
-        require Carp;
-        Carp::croak('rollback() used while autocommit is on');
-    }
+    croak 'rollback() used while autocommit is on'
+      if $self->autocommit;
 
     # Shortcut if there are no changes to rollback.
     return SUCCESS unless $self->is_changed;
@@ -777,7 +687,7 @@ sub rollback {
     eval {
         my $sth = $self->sql_GetMe(join(', ', $self->is_changed),
                                    $self->table,
-                                   $self->columns('Primary')
+                                   $self->primary
                                   );
         $sth->execute($self->id);
         $data = $sth->fetchrow_hashref;
@@ -789,8 +699,7 @@ sub rollback {
     }
 
     unless( defined $data ) {
-        require Carp;
-        Carp::carp("rollback failed for ".$self->id." of class $class.");
+        carp "rollback failed for ".$self->id." of class $class.";
         return;
     }
 
@@ -811,11 +720,10 @@ sub DESTROY {
     my($self) = shift;
 
     if( my @changes = $self->is_changed ) {
-        require Carp;
-        &Carp::carp( $self->id .' in class '. ref($self) .
-                     ' destroyed without saving changes to column(s) '.
-                     join(', ', map { "'$_'" } @changes) . ".\n"
-                   );
+        carp( $self->id .' in class '. ref($self) .
+              ' destroyed without saving changes to column(s) '.
+              join(', ', map { "'$_'" } @changes) . ".\n"
+            );
     }
 }
 
@@ -832,7 +740,7 @@ sub get {
         return $self->{$keys[0]};
     }
     elsif( @_ > 1 ) {
-        return @{$self}{@_};
+        return @{$self}{@keys};
     }
     else {
         assert(0) if DEBUG;
@@ -866,7 +774,7 @@ sub _flesh {
     eval {
         $sth = $self->sql_Flesh(join(', ', @cols),
                                 $self->table,
-                                $self->columns('Primary')
+                                $self->primary
                                );
         $sth->execute($self->id);
     };
@@ -909,19 +817,15 @@ sub set {
     my $value = shift;
 
     # Note the change for commit/rollback purposes.
-    # We increment instead of setting to 1 because it might be useful
-    # to someone to know how many times a value has changed between
-    # commits.
-    $self->{__Changed}{$key}++;
+    # We increment instead of setting to 1 because it might be useful to
+    # someone to know how many times a value has changed between commits.
 
+    $self->{__Changed}{$key}++ if $self->is_column($key);
     $self->SUPER::set($key, $value);
-
     $self->commit if $self->autocommit;
 
     return SUCCESS;
 }
-
-=pod
 
 =item B<is_changed>
 
@@ -932,12 +836,7 @@ keys which have changed.
 
 =cut
 
-sub is_changed {
-    my($self) = shift;
-    return keys %{$self->{__Changed}};
-}
-
-=pod
+sub is_changed { keys %{shift->{__Changed}} }
 
 =back
 
@@ -983,10 +882,8 @@ The defaults can always be overridden by supplying your own %attr.
 
 =cut
 
-#'#
-
-my %Per_DB_Attr_Defaults = 
-  (
+{
+  my %Per_DB_Attr_Defaults = (
    mysql        => { AutoCommit => 1 },
    pg           => { AutoCommit => 0, ChopBlanks => 1 },
    oracle       => { AutoCommit => 0, ChopBlanks => 1 },
@@ -994,8 +891,7 @@ my %Per_DB_Attr_Defaults =
    ram          => { AutoCommit => 1 },
   );
 
-
-sub set_db {
+  sub set_db {
     my($class, $db_name, $data_source, $user, $password, $attr) = @_;
 
     # 'dbi:Pg:dbname=foo' we want 'Pg'  I think this is enough.
@@ -1007,9 +903,8 @@ sub set_db {
     $attr = { %$default_attr, %$attr };
 
     $class->SUPER::set_db($db_name, $data_source, $user, $password, $attr);
+  }
 }
-
-=pod    
 
 =item B<id>
 
@@ -1022,10 +917,8 @@ $obj->get($self->columns('Primary'));
 
 sub id {
     my($self) = shift;
-    return $self->get($self->columns('Primary'));
+    return $self->get($self->primary);
 }
-
-=pod
 
 =begin _unimplemented
 
@@ -1094,24 +987,11 @@ Table information is inherited by subclasses, but can be overridden.
 __PACKAGE__->mk_classdata('__table');
 
 sub table {
-    my($proto) = shift;
-    my($class) = ref $proto || $proto;
-
-    no strict 'refs';
-    
-    if(@_) {
-        if( ref $proto ) {
-            require Carp;
-            Carp::carp('It is prefered to call table() as a class method '.
-                       '[Class->table($table)] rather than an object method '.
-                       '[$obj->table($table)] when setting the table.');
-        }
-    }
-
-    $class->__table(@_);
+  my $proto = shift;
+  my $class = ref $proto || $proto;
+  $class->_invalid_object_method('table()') if @_ and ref $proto;
+  $class->__table(@_);
 }
-
-=pod
 
 =item B<sequence>
 
@@ -1134,24 +1014,11 @@ B<NOTE>: Class::DBI also supports AUTO_INCREMENT and similar semantics.
 __PACKAGE__->mk_classdata('__sequence');
 
 sub sequence {
-    my($proto) = shift;
-    my($class) = ref $proto || $proto;
-
-    no strict 'refs';
-    
-    if(@_) {
-        if( ref $proto ) {
-            require Carp;
-            Carp::carp('It is prefered to call sequence() as a class method '.
-                       '[Class->sequence($seq)] rather than an object method '.
-                       '[$obj->sequence($seq)] when setting the sequence.');
-        }
-    }
-    
-    $class->__sequence(@_);
+  my $proto = shift;
+  my $class = ref $proto || $proto;
+  $class->_invalid_object_method('sequence()') if @_ and ref $proto;
+  $class->__sequence(@_);
 }
-
-=pod
 
 =item B<columns>
 
@@ -1194,8 +1061,13 @@ B<NOTE> I haven't decided on this method's behavior in scalar context.
 
 =cut
 
-#'#
+sub _invalid_object_method {
+  my ($self, $method) = @_;
+  carp "$method should be called as a class method not an object method";
+}
+
 __PACKAGE__->mk_classdata('__columns');
+__PACKAGE__->__columns({});
 
 sub columns {
     my($proto, $group, @columns) = @_;
@@ -1205,26 +1077,21 @@ sub columns {
     $group = 'All' unless defined $group;
 
     # Get %__Columns from the class's namespace.
-    no strict 'refs';
     my $class_columns = $class->__columns || {};
 
-    if(@columns) {
-        if( ref $proto ) {
-            require Carp;
-            Carp::carp('It is prefered to call columns() as a class method '.
-                       '[Class->columns($group, @cols)] rather than an '.
-                       'object method [$obj->columns($group, @cols)] when '.
-                       'setting columns.');
-        }
+    if (@columns) {
+        $class->_invalid_object_method('columns()') if ref $proto;
+        # Since we're going to be mucking with the columns, we need to
+        # copy $class_columns else we risk modifying our parent's info.
+        my %columns = %$class_columns;
 
         $class->_mk_column_accessors(@columns);
 
         $class->normalize(\@columns);
 
-        if( $group =~ /^Essential|All$/ and exists $class_columns->{Primary}) {
-            my($prim_col) = $class->columns('Primary');
-            unless( grep $_ eq $prim_col, @columns ) {
-                push @columns, $prim_col;
+        if( $group =~ /^Essential|All$/ and exists $columns{Primary}) {
+            unless( grep $_ eq $class->primary, @columns ) {
+                push @columns, $class->primary;
             }
         }
 
@@ -1235,24 +1102,23 @@ sub columns {
 
         # Group all these columns together in their group and All.
         # XXX Should this add to the group or overwrite?
-        $class_columns->{$group} = { map { ($_=>1) } @columns };
-        @{$class_columns->{All}}{@columns} = (1) x @columns 
+        $columns{$group} = { map { ($_=>1) } @columns };
+        @{$columns{All}}{@columns} = (1) x @columns 
           unless $group eq 'All';
 
         # Force columns() to be overriden if necessary.
-        $class->__columns($class_columns);
+        $class->__columns(\%columns);
 
         $class->_flush_col2group;
 
         # This must happen at the end or else __columns() will trip
         # over itself.
-        if( $group eq 'All' and !keys %{$class_columns->{'Primary'}} ) {
+        if( $group eq 'All' and !keys %{$columns{'Primary'}} ) {
             $class->columns('Primary', $columns[0]);
         }
 
         return SUCCESS;
-    }
-    else {
+    } else {
         # Build Essential if not already built.
         if( $group eq 'Essential' and !exists $class_columns->{Essential} ) {
             # Careful to make a copy.
@@ -1260,8 +1126,7 @@ sub columns {
         }
 
         unless ( exists $class_columns->{$group} ) {
-            require Carp;
-            Carp::carp("'$group' is not a column group of '$class'");
+            carp "'$group' is not a column group of '$class'";
             return;
         } else {
             return keys %{$class_columns->{$group}};
@@ -1269,34 +1134,26 @@ sub columns {
     }
 }
 
-{
-    no strict 'refs';
+sub primary   { (shift->columns('Primary'))[0] }
+sub essential { (shift->columns('Essential'))[0] }
 
-    sub _mk_column_accessors {
-        my($class, @columns) = @_;
-        
-        my(@col_meths) = @columns;
-        $class->normalize(\@columns);
-        
-        assert(@col_meths == @columns) if DEBUG;
+sub _mk_column_accessors {
+  my($class, @col_meths) = @_;
+  my(@columns) = $class->_normalized(@col_meths);
 
-        for my $idx (0..$#columns) {
-            my($col)  = $columns[$idx];
-            my $accessor = $class->make_accessor($col);
-            
-            my($meth) = $col_meths[$idx];
-            my $alias    = "_${meth}_accessor";
-            
-            *{$class."\::$meth"} = $accessor
-              unless defined &{$class."\::$meth"};
-            *{$class."\::$alias"} = $accessor
-              unless defined &{$class."\::$alias"};
-        }
-    }
+  assert(@col_meths == @columns) if DEBUG;
+
+  no strict 'refs';
+  for my $i (0..$#columns) {
+    my $col      = $columns[$i];
+    my $meth     = $col_meths[$i];
+    my $alias    = "_${meth}_accessor";
+    my $accessor = $class->make_accessor($col);
+
+    *{"$class\::$meth"}  = $accessor unless defined &{"$class\::$meth"};
+    *{"$class\::$alias"} = $accessor unless defined &{"$class\::$alias"};
+  }
 }
-    
-
-=pod
 
 =item B<is_column>
 
@@ -1309,52 +1166,37 @@ object.
 =cut
 
 sub is_column {
-    my($proto, $column) = @_;
-    my($class) = ref $proto || $proto;
-
-    $class->normalize_one(\$column);
-
-    my $col2group = $class->_get_col2group;
-
-    return exists $col2group->{$column} ? scalar @{$col2group->{$column}}
-                                        : NO;
+  my $proto = shift;
+  my $class = ref $proto || $proto;
+  my $column = $class->_normalized(shift);
+  my $col2group = $class->_get_col2group;
+  return exists $col2group->{$column} ? scalar @{$col2group->{$column}} : 0;
 }
-
 
 __PACKAGE__->mk_classdata('__Col2Group');
 
 sub _get_col2group {
-    my($proto) = shift;
-    my($class) = ref $proto || $proto;
+  my $proto  = shift;
+  my $class  = ref $proto || $proto;
+  my $col2group = $class->__Col2Group || {};
+     $col2group = $class->_make_col2group if !keys %$col2group;
+  return $col2group;
+}
 
-    no strict 'refs';   
-    my $col2group = $class->__Col2Group || {};
-
-    # Build %__Col2Group if necessary.
-    unless( keys %$col2group ) {
-        while( my($group, $cols) = each %{$class->__columns} ) {
-            foreach my $col (keys %$cols) {
-                push @{$col2group->{$col}}, $group;
-            }
-        }
-        
-        # Allow __Col2Group to override itself if necessary.
-        $class->__Col2Group($col2group);
-    }
-
-    return $col2group;
+sub _make_col2group {
+  my $class  = shift;
+  my $col2group = {};
+  while( my($group, $cols) = each %{$class->__columns} ) {
+    push @{$col2group->{$_}}, $group foreach keys %$cols;
+  }
+  return $class->__Col2Group($col2group);
 }
 
 sub _flush_col2group {
-    my($proto) = shift;
-    my($class) = ref $proto || $proto;
-
-    my $col2group = $class->__Col2Group;
-    %$col2group = ();
+    my $proto = shift;
+    my $class = ref $proto || $proto;
+       $class->__Col2Group({});
 }
-
-
-=pod
 
 =back
 
@@ -1398,9 +1240,9 @@ instead of just their name.
 
     Class->hasa($foreign_class, @foreign_key_columns);
 
-Declares that the given Class has a relationship with the
-$foreign_class and is storing $foreign_class's primary key
-information in the @foreign_key_columns.
+Declares that the given Class has a one-to-one or many-to-one 
+relationship with the $foreign_class and is storing $foreign_class's
+primary key information in the @foreign_key_columns.
 
 An accessor will be generated with the name of the first element in
 @foreign_key_columns.  It gets/sets objects of $foreign_class.  Using
@@ -1428,7 +1270,6 @@ NOTE  The two classes do not have to be in the same database!
 
 =cut
 
-#'#
 __PACKAGE__->mk_classdata('__hasa_columns');
 
 sub hasa {
@@ -1497,18 +1338,84 @@ sub _load_class {
         # Other fatal errors (syntax etc) must be reported.
         die if $@ && $@ !~ /^Can't locate .*? at \(eval /; #';
         unless (%{"$foreign_class\::"}) {
-            require Carp;
-            Carp::croak("Foreign class package \"$foreign_class\" is empty.\n",
-                        "\t(Perhaps you need to 'use' the module ",
-                        "which defines that package first.)");
+            croak("Foreign class package \"$foreign_class\" is empty.\n",
+                  "\t(Perhaps you need to 'use' the module ",
+                  "which defines that package first.)");
         }
         ${"$foreign_class\::VERSION"} = "-1, set by Class::DBI"
             unless exists ${"$foreign_class\::"}{VERSION};
     }
 }
 
+=item B<hasa_list>
 
-=pod
+  Class->hasa_list($foreign_class, \@foreign_keys, $accessor_name);
+
+Declares that the given Class has a one-to-many relationship with the
+$foreign_class.  Class's primary key is stored in @foreign_key columns
+in the $foreign_class->table.  An accessor will be generated with the
+given $accessor_name and it returns a list of objects related to the
+Class.
+
+Ok, confusing.  Its like this...
+
+    CREATE TABLE Actors (
+        Name            CHAR(40),
+        Film            VARCHAR(255)    REFERENCES Movies,
+
+        # Its sad that the average salary won't fit into an integer.
+        Salary          BIG INTEGER UNSIGNED
+    );
+
+with a subclass around it.
+
+    package Film::Actors;
+    use base qw(Class::DBI);
+
+    Film::Actors->table('Actors');
+    Film::Actors->columns(All   => qw(Name Film Salary));
+    Film::Actors->set_db(...);
+
+Any film is going to have lots of actors.  You'd declare this
+relationship like so:
+
+    Film->hasa_list('Film::Actors', ['Film'], 'overpaid_gits');
+
+Declars that a Film has many Film::Actors associated with it.  These
+are stored in the Actors table (gotten from Film::Actors->table) with
+the column Film containing Film's primary key.  This is accessed via
+the method 'overpaid_gits()'.
+
+    my @actors = $film->overpaid_gits;
+
+This basically does a "'SELECT * FROM Actors WHERE Film = '.$film->id"
+turning them into objects and returning.
+
+The accessor is currently read-only.
+
+=cut
+
+sub hasa_list {
+    my($class, $foreign_class, $foreign_keys, $accessor_name) = @_;
+
+    $class->_load_class($foreign_class);
+
+    croak "Multiple foreign primary keys not yet implemented"
+      if @$foreign_keys > 1;
+
+    my($foreign_key) = @$foreign_keys;
+
+    my $accessor = sub {
+        my $self = shift;
+        croak "$accessor_name is read-only" if @_;
+        return $foreign_class->search($foreign_key => $self->id);
+    };
+
+    {
+        no strict 'refs';
+        *{$class.'::'.$accessor_name} = $accessor;
+    }
+}
 
 =back
 
@@ -1560,36 +1467,6 @@ returning strangely cased column names (along with table names
 appended to the front) we normalize all column names before using them
 as data keys.
 
-=cut
-
-sub normalize {
-    my($self, $columns) = @_;
-    
-    assert(ref $columns eq 'ARRAY') if DEBUG;
-
-    foreach my $col (@$columns) {
-        $col =~ s/^.*\.//;  # Chop off the possible table & database names.
-        # 0A is ASCII 11 vertical tab.
-        $col =~ tr/ \t\n\r\f\x0A/______/;  # Translate whitespace to _
-        $col = lc $col;
-    }
-    
-    return SUCCESS;
-}
-
-
-# XXX Icky hack.
-sub normalize_one {
-    my($self, $col) = @_;
-
-    my @cols = ($$col);
-    $self->normalize(\@cols);
-    $$col = $cols[0];
-}
-
-
-=pod
-
 =item B<normalize_hash>
 
     $obj->normalize_hash(\%hash);
@@ -1598,6 +1475,29 @@ Given a %hash, it will normalize all its keys using normalize().
 This is for convenience.
 
 =cut
+
+sub _normalized {
+  my $self = shift;
+  my @data = @_;
+  my @return = map {
+    s/^.*\.//;   # Chop off the possible table & database names.
+    tr/ \t\n\r\f\x0A/______/;  # Translate whitespace to _
+    lc;
+  } @data;
+  return wantarray ? @return : $return[0];
+}
+
+sub normalize {
+  my($self, $colref) = @_;
+  croak "Normalize needs a listref" unless ref $colref eq 'ARRAY';
+  $_ = $self->_normalized($_) foreach @$colref;
+  return 1;
+}
+
+sub normalize_one {
+  my ($self, $col) = @_;
+  $$col = $self->_normalized($$col);
+}
 
 sub normalize_hash {
     my($self, $hash) = @_;
@@ -1612,8 +1512,6 @@ sub normalize_hash {
 
     return SUCCESS;
 }
-
-=pod
 
 =back
 
@@ -1658,8 +1556,6 @@ sub set_sql {
 
     $class->SUPER::set_sql($name, $sql, $db);
 }
-
-=pod
 
 =head2 Transactions
 
@@ -1761,9 +1657,7 @@ So how might you use this?  At the moment, something like this...
       $obj->dbi_commit;
   }
 
-
 Kinda clunky, but servicable.  As I said, better things are on the way.
-
 
 =head2 Searching
 
@@ -1782,41 +1676,6 @@ whose $key has the given $value.
 
     @films = Film->search('Rating', 'PG');
 
-=cut
-
-__PACKAGE__->set_sql('Search', <<"", 'Main');
-SELECT  %s 
-FROM    %s
-WHERE   %s = ?
-
-
-sub search {
-    my($proto, $key, $value) = @_;
-    my($class) = ref $proto || $proto;
-
-    $class->normalize_one(\$key);
-
-    unless( @_ == 3 ) {
-        require Carp;
-        Carp::croak("Not enough arguments to search()");
-    }
-    assert($class->is_column($key)) if DEBUG;
-
-    my $sth;
-    eval {
-        $sth = $class->sql_Search(join(', ', $class->columns('Essential')),
-                              $class->table,
-                              $key);
-        $sth->execute($value);
-    };
-    if($@) {
-        $class->DBIwarn("'$key' -> '$value'", 'Search');
-        return;
-    }
-
-    return map { $class->construct($_) } $sth->fetchall_hash;
-}
-
 =item B<search_like>
 
   @objs = Class->search_like($key, $like_pattern);
@@ -1834,46 +1693,69 @@ XXX Should I offer glob-style * and ? instead of % and _?
 
 =cut
 
+__PACKAGE__->set_sql('GetMe', <<"", 'Main');
+SELECT %s
+FROM   %s
+WHERE  %s = ?
+
+__PACKAGE__->set_sql('Search', <<"", 'Main');
+SELECT  %s
+FROM    %s
+WHERE   %s = ?
+
 __PACKAGE__->set_sql('SearchLike', <<"", 'Main');
 SELECT    %s
 FROM      %s
 WHERE     %s LIKE ?
 
-
-sub search_like {
-    my($proto, $key, $pattern) = @_;
-    my($class) = ref $proto || $proto;
-
-    $class->normalize_one(\$key);
-
-    assert($class->is_column($key)) if DEBUG;
-
-    my $sth;
-    eval {
-        $sth = $class->sql_SearchLike(join(', ', $class->columns('Essential')),
-                                      $class->table,
-                                      $key
-                                     );
-        $sth->execute($pattern);
-    };
-    if($@) {
-        $class->DBIwarn("'$key' -> '$pattern'", 'SearchLike');
-        return;
-    }
-
-    return map { $class->construct($_) } $sth->fetchall_hash;
+sub search {
+  my $self = shift;
+  $self->_run_search('Search', @_);
 }
 
+sub search_like {
+  my $self = shift;
+  $self->_run_search('SearchLike', @_);
+}
 
-=pod
+sub _run_search {
+  my $proto = shift;
+  my $class = ref $proto || $proto;
+  my $SQL = shift;
+     croak "Not enough arguments to search()" unless @_ == 2;
+  my $key = $class->_normalized(shift);
+     croak "$key is not a column" unless $class->is_column($key);
+  my $val = shift;
+  my $sth = $class->_run_query($SQL, [$key], [$val]) or return;
+  return map $class->construct($_), $sth->fetchall_hash;
+}
 
+sub _run_query {
+  my $class = shift;
+  my ($type, $keys, $vals, $columns) = @_;
+  $columns ||= [ $class->columns('Essential') ];
+  my $sth;
+  eval {
+    my $sql_method = "sql_$type";
+    $sth = $class->$sql_method(
+      join(', ', @$columns),
+      $class->table,
+      @$keys
+    );
+    $sth->execute(@$vals);
+  };
+  if($@) {
+    $class->DBIwarn("Problems with $type");
+    return;
+  }
+  return $sth;
+}
 
 =head1 EXAMPLES
 
 Ummm... well, there's the SYNOPSIS.
 
-XXX Need more examples.  They'll come.
-
+We need more examples.  They'll come.
 
 =head1 CAVEATS
 
@@ -1887,7 +1769,6 @@ some limited object data caching.
 
 In short, there's no problem with using Class::DBI under mod_perl.  In
 fact, it'll run better.
-
 
 =head2 Only simple scalar values can be stored
 
@@ -1915,7 +1796,6 @@ Having more than one column as your primary key in the SQL table is
 currently not supported.  Why?  Its more complicated.  A later version
 will support multi-column keys.
 
-
 =head1 TODO
 
 =head2 Table/object relationships need to be handled.
@@ -1926,8 +1806,7 @@ fairly simple manner.
 
 =head2 Lists are poorly supported
 
-There's no graceful way to handle lists of things as object data.
-This is also something I plan to implement eventually.
+hasa_list() is a start, but I think the hasa() concept is weak.
 
 =head2 Using pseudohashes as objects has to be documented
 
@@ -1935,7 +1814,7 @@ This is also something I plan to implement eventually.
 
 =head2 Object caching needs to be added
 
-=head2 Multi-column primary keys untested.
+=head2 Multi-column primary keys
 
 If you need this feature let me know and I'll get it working.
 
@@ -1951,11 +1830,11 @@ If you need this feature let me know and I'll get it working.
 
 dbi_commit() is a start, but not done.
 
+=head2 Make all internal statements use fully-qualified columns
 
 =head1 BUGS and CAVEATS
 
-Altering the primary key column current causes Bad Things to happen.
-
+Altering the primary key column currently causes Bad Things to happen.
 
 =head2 Tested with...
 
@@ -1973,12 +1852,12 @@ DBD::Oracle (patches still coming in)
 
 DBD::RAM
 
-
 =head1 AUTHOR
 
 Michael G Schwern <schwern@pobox.com> with much late-night help from
 Uri Gutman, Damian Conway, Mike Lambert and the POOP group.
 
+Now developed and maintained by Tony Bowden <kasei@tmtm.com>
 
 =head1 SEE ALSO
 

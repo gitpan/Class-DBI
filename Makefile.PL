@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.10 2001/04/09 13:43:17 schwern Exp $
+# $Id: Makefile.PL,v 1.9 2000/09/10 05:07:25 schwern Exp $
 #
 # A template for Makefile.PL used by Arena Networks.
 # - Set the $PACKAGE variable to the name of your module.
@@ -33,14 +33,17 @@ WriteMakefile(
     NAME                => $PACKAGE,
     VERSION_FROM        => 'lib/Class/DBI.pm',
     PREREQ_PM           => {
-                            Carp::Assert        => 0.06,
-                            Class::Accessor     => '0.10',
-                            Class::Data::Inheritable => 0.02,
-                            Class::Fields       => '0.13',
-                            Class::Fields::Fuxor=> '0.06',
-                            Ima::DBI            => '0.25',
-                            base                => 1.96,
-                            protected           => 0.01,
+                            Carp::Assert             => '0.06',
+                            Class::Accessor          => '0.10',
+                            Class::Data::Inheritable => '0.02',
+                            Class::Fields            => '0.13',
+                            Class::Fields::Fuxor     => '0.06',
+                            DBD::CSV                 => '0.1022',
+                            Ima::DBI                 => '0.25',
+                            base                     => '1.96',
+                            protected                => '0.01',
+                            Test::More               => '0.11',
+                            File::Temp               => '0.12',
                            },
     'dist'              => { COMPRESS   => 'gzip -9',
                              SUFFIX     => '.gz',
