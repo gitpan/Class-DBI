@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -242,7 +242,7 @@ sub _data_hash {
            $data{$self->primary} = shift if @_;
     return \%data;
 }
-   
+
 sub copy {
   my $self = shift;
   return $self->create($self->_data_hash(@_));
@@ -358,6 +358,7 @@ WHERE  %s = ?
 
 sub commit {
   my $self = shift;
+  my $class = ref($self);
   my $table = $self->table;
   assert( defined $table ) if DEBUG;
 
@@ -365,10 +366,9 @@ sub commit {
     eval {
       my $sth = $self->sql_commit(
         $table,
-        join( ', ', map "$_ = " . $self->_column_placeholder, @changed_cols),
+        join( ', ', map "$_ = " . $self->_column_placeholder($_), @changed_cols),
         $self->primary
       );
-        
       $sth->execute((map $self->{$_}, @changed_cols), $self->id);
     };
     if ($@) {
@@ -376,6 +376,9 @@ sub commit {
       return;
     }
     $self->{__Changed}  = {};
+    # Repopulate ourselves.
+    delete $self->{$_} for @changed_cols;
+    $self->_flesh('All');
   }
   return SUCCESS;
 }
@@ -519,14 +522,14 @@ sub _flesh {
 
 sub _cols2groups {
   my($self, @cols) = @_;
-   
+
   my %groups = ();
   my $col2group = $self->_get_col2group;
 
   foreach my $col (@cols) {
     $groups{$_}++ foreach @{$col2group->{$col}};
   }
-   
+
   return grep !/^All$/, keys %groups;
 }
 
@@ -711,7 +714,7 @@ sub essential { shift->columns('Essential') }
 
 Make a set of accessors for each of a list of columns.  We construct
 the method name by calling accessor_name() and mutator_name() with the
-normalized column name. 
+normalized column name.
 
 mutator_name will be the same as accessor_name unless you override it.
 
@@ -747,7 +750,7 @@ sub _make_method {
   no strict 'refs';
   *{"$class\::$name"} = $method unless defined &{"$class\::$name"};
 }
-  
+
 sub accessor_name {
   my ($class, $column) = @_;
   return $column;
@@ -845,15 +848,15 @@ sub hasa {
 
     my $accessor = sub {
         my($self) = shift;
-       
+
         if (@_) {             # setting
             my ($obj) = shift;
             $self->{$obj_key} = $obj;
-           
+
             # XXX Have to fix this for mult-col foreign keys.
             $self->$foreign_col_accessor($obj->id);
         }
-       
+
         # XXX Fix this, too.
         if ( not defined $self->{$obj_key} ) {
             my $obj_id = $self->$foreign_col_accessor();
@@ -863,7 +866,7 @@ sub hasa {
 
         return $self->{$obj_key};
     };
-     
+
     # This might cause a subroutine redefined warning.
     {
         local $^W = 0;
@@ -974,7 +977,7 @@ sub normalize_hash {
 
     @normal_cols = @cols = keys %$hash;
     $self->normalize(\@normal_cols);
-   
+
     assert(@normal_cols == @cols) if DEBUG;
 
     @{$hash}{@normal_cols} = delete @{$hash}{@cols};

@@ -1,4 +1,4 @@
-0.30  Sat Sep  8 20:55:27 BST 2001
+0.31  Sun Sep  9 00:41:37 BST 2001
     + split out _column_placeholder (thanks to Jonathan Swartz)
     + added hasa() checks for orphaned rows
 

@@ -1,7 +1,7 @@
 use strict;
 
 use vars qw/$TESTS/;
-BEGIN { $TESTS = 8; }
+BEGIN { $TESTS = 11; }
 
 use Test::More tests => $TESTS;
 
@@ -31,11 +31,15 @@ SKIP: {
   ok(my $bar = Foo->create({ name => "bar", val => 10, tdate => 1 }), "Create bar");
   ok(my $baz = Foo->create({ name => "baz", val => 20, tdate => 1 }), "Create baz");
   is($baz->id, $bar->id + 1, "Auto incremented primary key");
-  is($bar->tdate, Date::Simple->new, " .. got today's date");
+  is($bar->tdate, Date::Simple->new->format, " .. got today's date");
   ok(my $wibble = $bar->copy, "Copy with auto_increment");
   is($wibble->id, $baz->id + 1, " .. correct key");
   ok(my $wobble = $bar->copy(6), "Copy without auto_increment");
   is($wobble->id, 6, " .. correct key");
+  ok($wobble->tdate(1) && $wobble->commit, "Set the date of wobble");
+  is($wobble->tdate, Date::Simple->new->format, " set OK");
+  $wobble = Foo->retrieve($wobble->id);
+  is($wobble->tdate, Date::Simple->new->format, " set OK in DB too");
 
   $dbh->do("DROP TABLE $table");
   $dbh->disconnect;
