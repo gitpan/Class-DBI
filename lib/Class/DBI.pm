@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.29';
+$VERSION = '0.30';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -118,7 +118,7 @@ sub _insert_row {
     my $sth = $self->sql_MakeNewObj(
       $self->table,
       join(', ', keys %$data),
-      join(', ', ('?') x keys %$data)
+      join(', ', map $self->_column_placeholder($_), keys %$data),
     );
     $sth->execute(values %$data);
     # If we still don't have a primary key, try AUTO_INCREMENT.
@@ -321,12 +321,33 @@ sub autocommit {
     }
 }
 
+=head2 _column_placeholder
+
+  my $placeholder = $self->_column_placeholder($column_name);
+
+Return the placeholder to be used in UPDATE and INSERT queries.  Usually
+you'll want this just to return '?', as per the default.  However, this
+lets you set, for example, that a column should always be CURDATE()
+[MySQL doesn't allow this as a DEFAULT value] by subclassing:
+
+  sub _column_placeholder {
+    my ($self, $column) = @_;
+    if ($column eq "entry_date") {
+      return "IF(1, CURDATE(), ?)";
+    }
+    return "?";
+  }
+
+=cut
+
+sub _column_placeholder { '?' }
+
 =head2 commit
 
 Writes any changes you've made via accessors to disk.  There's nothing
 wrong with using commit() when autocommit is on, it'll just silently
-do nothing. If the object is DESTROYed before you call commit()
-we will issue a warning.
+do nothing. If the object is DESTROYed before you call commit() we will
+issue a warning.
 
 =cut
 
@@ -342,10 +363,12 @@ sub commit {
 
   if (my @changed_cols = $self->is_changed) {
     eval {
-      my $sth = $self->sql_commit($table,
-                                  join( ', ', map { "$_ = ?" } @changed_cols),
-                                  $self->primary
+      my $sth = $self->sql_commit(
+        $table,
+        join( ', ', map "$_ = " . $self->_column_placeholder, @changed_cols),
+        $self->primary
       );
+        
       $sth->execute((map $self->{$_}, @changed_cols), $self->id);
     };
     if ($@) {
@@ -362,7 +385,7 @@ sub DESTROY {
     if( my @changes = $self->is_changed ) {
         carp( $self->id .' in class '. ref($self) .
               ' destroyed without saving changes to column(s) '.
-              join(', ', map { "'$_'" } @changes) . ".\n"
+              join(', ', map { "'$_'" } @changes) . "."
             );
     }
 }
@@ -823,21 +846,21 @@ sub hasa {
     my $accessor = sub {
         my($self) = shift;
        
-        if ( @_ ) {             # setting
-            my($obj) = shift;
+        if (@_) {             # setting
+            my ($obj) = shift;
             $self->{$obj_key} = $obj;
            
             # XXX Have to fix this for mult-col foreign keys.
             $self->$foreign_col_accessor($obj->id);
         }
        
-        unless ( defined $self->{$obj_key} ) {
-            # XXX Fix this, too.
+        # XXX Fix this, too.
+        if ( not defined $self->{$obj_key} ) {
             my $obj_id = $self->$foreign_col_accessor();
-            $self->{$obj_key} = $foreign_class->retrieve($obj_id) if
-              defined $obj_id;
+            $self->{$obj_key} = $foreign_class->retrieve($obj_id) or
+              croak("Can't retrieve $foreign_class ($obj_id)");
         }
-       
+
         return $self->{$obj_key};
     };
      
