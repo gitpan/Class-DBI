@@ -45,7 +45,7 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 21 }
+BEGIN { $Total_tests = 23 }
 
 
 package Film;
@@ -59,9 +59,33 @@ Film->table('Movies');
 Film->columns('Primary', 'Title');
 ::ok( ::eqarray([Film->columns('Primary')], ['Title']),			'columns()'	);
 
-die "For now, Class::DBI needs DBD::CSV in order to test properly."
-  unless grep { $_ eq 'CSV' } DBI->available_drivers;
-Film->set_db('Main', 'DBI:CSV:f_dir=testdb', undef, undef, {AutoCommit => 1});
+my %dbi;
+my @dbi_drivers = DBI->available_drivers;
+unless( grep { $_ eq 'CSV' } @dbi_drivers ) {
+	my $old_fh = select(STDERR);
+	print "\n";
+	print "Class::DBI prefers DBD::CSV for testing but cannot find it.";
+	print "Give me an alternate DBI data source: (",
+	      join(', ', map { "dbi:$_:<mumble>" } @dbi_drivers), "):  ";
+	$dbi{'data src'} 	= <STDIN>;
+	chomp $dbi{'data src'};
+	print "A username to access this data source:  ";
+	$dbi{'user'} 		= <STDIN>;
+	chomp $dbi{user};
+	print "And a password:  ";
+	$dbi{'password'} 	= <STDIN>;
+	chomp $dbi{password};
+
+	select($old_fh);
+}
+else {									# We like DBD::CSV
+	$dbi{'data src'} 	= 'DBI:CSV:f_dir=testdb';
+	$dbi{user}			= '';
+	$dbi{password}		= '';
+}
+
+Film->set_db('Main', @{dbi}{'data src', 'user', 'password'}, 
+			 {AutoCommit => 1});
 ::ok( Film->can('db_Main'),									'set_db()'	);
 
 # Set up a table for ourselves.
@@ -85,18 +109,18 @@ my $btaste = Film->new({ Title       => 'Bad Taste',
 						 Rating      => 'R',
 						 NumExplodingSheep   => 1
 					   });
-::ok( defined $btaste and ref $btaste eq 'Film',				'new()'		);
-::ok( $btaste->Title 		eq 'Bad Taste',					'Title() get' 	);
-::ok( $btaste->Director 	eq 'Peter Jackson',			'Director() get'	);
-::ok( $btaste->Rating		eq 'R',						'Rating() get'		);
-::ok( $btaste->NumExplodingSheep == 1,			'NumExplodingSheep() get'	);
+::ok( defined $btaste and ref $btaste 	eq 'Film',		'new()'		);
+::ok( $btaste->Title 			eq 'Bad Taste',		'Title() get' 	);
+::ok( $btaste->Director 		eq 'Peter Jackson',	'Director() get'	);
+::ok( $btaste->Rating			eq 'R',			'Rating() get'		);
+::ok( $btaste->NumExplodingSheep == 1,				'NumExplodingSheep() get'	);
 
 
 Film->new({ Title		=> 'Gone With The Wind',
-			Director	=> 'Bob Baggadonuts',
-			Rating		=> 'PG',
-			NumExplodingSheep	=> 0
-		  });
+	    Director		=> 'Bob Baggadonuts',
+	    Rating		=> 'PG',
+	    NumExplodingSheep	=> 0
+	  });
 
 # Retrieve the 'Gone With The Wind' entry from the database.
 my $gone = Film->retrieve('Gone With The Wind');
@@ -110,6 +134,10 @@ $gone->NumExplodingSheep(5);
 $gone->Rating('NC-17');
 ::ok( $gone->Rating eq 'NC-17',						'Rating() set'			);
 $gone->commit;
+
+my $gone_copy = Film->retrieve('Gone With The Wind');
+::ok( $gone->NumExplodingSheep == 5,								'commit()'		);
+::ok( $gone->Rating eq 'NC-17',									'commit() again'	);
 
 # Grab the 'Bladerunner' entry.
 Film->new({ Title		=> 'Bladerunner',
@@ -140,7 +168,7 @@ Film->retrieve('Ishtar')->delete;
 ::ok( !Film->retrieve('Ishtar'),								'delete()'	);
 
 # Find all films which have a rating of PG.
-my @films = Film->search('Rating', 'PG');
+my @films = Film->search('Rating', 'NC-17');
 ::ok( @films == 1 and $films[0]->id eq $gone->id,				'search()'	);
 
 # Find all films which were directed by Bob

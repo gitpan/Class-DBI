@@ -5,7 +5,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = 0.02;
+$VERSION = 0.03;
 
 use Carp::Assert;
 use base qw(Class::Accessor Ima::DBI);
@@ -13,7 +13,7 @@ use base qw(Class::Accessor Ima::DBI);
 # Little trick to allow goto &Class::DBI::AUTOLOAD to work.
 *AUTOLOAD = \&Class::Accessor::AUTOLOAD;
 
-use protected qw(_Changed _AutoCommit _OrigValues);
+use protected qw(__Changed __AutoCommit __OrigValues);
 
 use constant TRUE       => (1==1);
 use constant FALSE      => !TRUE;
@@ -255,8 +255,8 @@ sub _init {
     my($class) = shift;
     my($self) = {};
 
-    $self->{_Changed} 		= {};
-	$self->{_OrigValues} 	= {};
+    $self->{__Changed} 		= {};
+	$self->{__OrigValues} 	= {};
 
 	return bless $self, $class;
 }
@@ -274,13 +274,13 @@ Given an ID it will retrieve an object with that ID from the database.
 =cut
 
 __PACKAGE__->make_sql('GetMe',
-                      sub {
-                          my($class) = @_;
+					  sub {
+						  my($class) = @_;
 
-                          return <<"";
-                          SELECT    ${\( join(', ', $class->columns) )}
-                          FROM      ${\( $class->table )}
-                          WHERE     ${\( $class->columns('Primary') )} = ?
+						  return <<"";
+                    SELECT    ${\( join(', ', $class->columns('Essential')) )}
+                    FROM      ${\( $class->table )}
+                    WHERE     ${\( $class->columns('Primary') )} = ?
 
                       }
                      );
@@ -469,11 +469,11 @@ sub autocommit {
         my $on_or_off = $_[0];
         if( ref $proto ) {
             my $self = $proto;
-            $self->{_AutoCommit} = $on_or_off;
+            $self->{__AutoCommit} = $on_or_off;
         }
         else {
             no strict 'refs';
-            ${$class.'::_AutoCommit'} = $on_or_off;
+            ${$class.'::__AutoCommit'} = $on_or_off;
         }
         return SUCCESS;
     }
@@ -482,7 +482,7 @@ sub autocommit {
         # the class.
         if( ref $proto ) {
             my $self = $proto;
-            return $self->{_AutoCommit} if defined $self->{_AutoCommit};
+            return $self->{__AutoCommit} if defined $self->{__AutoCommit};
         }
 		no strict 'refs';
         if( defined ${$class.'::__AutoCommit'} ) {
@@ -513,16 +513,14 @@ sub commit {
     my $table = $self->table;
     assert( defined $table ) if DEBUG;
 
-    my @changed_cols = keys %{$self->{_Changed}};
-	my @columns		 = $self->columns;
-
-    if( @changed_cols ) {
+    if( $self->is_changed ) {
+		my @changed_cols = keys %{$self->{__Changed}};
         my($primary_col) = $self->columns('Primary');
 
         # Alas, this must be generated on the fly.
         my $sql = '';
         $sql .= "UPDATE $table\n";
-        $sql .= 'SET '. join( ', ', map { "$_ = ?" } @columns) ."\n";
+        $sql .= 'SET '. join( ', ', map { "$_ = ?" } @changed_cols) ."\n";
         $sql .= "WHERE $primary_col = ?";
 
         eval {
@@ -536,7 +534,8 @@ sub commit {
             return;
         }
 
-        $self->{_Changed} = {};
+        $self->{__Changed} 		= {};
+		$self->{__OrigValues} 	= {};
     }
 
     return SUCCESS;
@@ -568,11 +567,11 @@ sub rollback {
     return SUCCESS unless $self->is_changed;
 
     # Stick the original values back into the object.
-    @{$self}{keys %{$self->{_OrigValues}}} = values %{$self->{_OrigValues}};
+    @{$self}{keys %{$self->{__OrigValues}}} = values %{$self->{__OrigValues}};
 
     # Dump the original values and changes.
-    $self->{_OrigValues} = {};
-    $self->{_Changed}    = {};
+    $self->{__OrigValues} = {};
+    $self->{__Changed}    = {};
 
     return SUCCESS;
 }
@@ -588,7 +587,20 @@ sub DESTROY {
 }
 
 
-# We can use the existing get().
+sub get {
+	my($self, @keys) = @_;
+
+	if(@keys == 1) {
+		return $self->{$keys[0]};
+	}
+	elsif( @_ > 1 ) {
+		return @{$self}{@_};
+	}
+	else {
+		assert(0) if DEBUG;
+	}
+}
+
 
 sub set {
     my($self, $key) = splice(@_, 0, 2);
@@ -599,8 +611,11 @@ sub set {
     my $value = shift;
 
     # Store the original value for rollback purposes.
-    $self->{_OrigValues}{$key} = $value unless 
-      exists $self->{_OrigValues}{$key};
+    $self->{__OrigValues}{$key} = $value unless 
+      exists $self->{__OrigValues}{$key};
+
+	# Note the change.
+	$self->{__Changed}{$key} = 1;
 
     $self->SUPER::set($key, $value);
 
@@ -608,6 +623,23 @@ sub set {
 
     return SUCCESS;
 }
+
+=pod
+
+=item B<is_changed()>
+
+  $obj->is_changed;
+
+Indicates if the given $obj has uncommitted changes.
+
+=cut
+
+sub is_changed {
+	my($self) = shift;
+	return scalar keys %{$self->{__Changed}};
+}
+
+=pod
 
 =back
 
@@ -688,10 +720,11 @@ generated from your public data fields if you don't set it yourself.
 B<'Primary'> is the single primary key column for this class.  It I<must>
 be set before objects can be used.
 
-B<'Essential'> are the minimal set of columns needed to load and use the
-object.  Its typically used so save memory on a class that has alot of
-columns but most only uses a few of them.  (Again, this class does not
-take advantage of this).
+B<'Essential'> are the minimal set of columns needed to load and use
+the object.  Its typically used so save memory on a class that has
+alot of columns but most only uses a few of them.  It will
+automatically be generated from C<Class->columns('All')> if you don't
+set it yourself.
 
     Class->columns('Primary', 'Title');
 
@@ -708,12 +741,7 @@ sub columns {
 
     # Get %__Columns from the class's namespace.
     no strict 'refs';
-    my $class_columns = \%{$class.'::__Columns'};
-
-    # Build $__COLUMNS{All} if not already built.
-    if( $group eq 'All' and !exists $class_columns->{All} ) {
-        $class_columns->{All} = [$class->show_fields('Public')];
-    }
+    my $class_columns = \%{$class.'::__Columns'};		
 
     if(@columns) {
         if( ref $proto ) {
@@ -727,6 +755,17 @@ sub columns {
         return SUCCESS;
     }
     else {
+		# Build $__Columns{All} if not already built.
+		if( $group eq 'All' and !exists $class_columns->{All} ) {
+			$class_columns->{All} = [$class->show_fields('Public')];
+		}
+
+		# Build $__Columns{Essential} if not already built.
+		if( $group eq 'Essential' and !exists $class_columns->{Essential} ) {
+			# Careful to make a copy.
+			$class_columns->{Essential} = [@{$class_columns->{All}}];
+		}
+
         unless ( exists $class_columns->{$group} ) {
             require Carp;
             Carp::carp("'$group' is not a column group of '$class'");
@@ -821,9 +860,9 @@ Generally, a call to make_sql() looks something like this:
                         my($class) = shift;
 
 						my $sql = '';
-						$sql .= 'SELECT '. join(', ', $class->columns)  ."\n";
-						$sql .= 'FROM   '. $class->table                ."\n";
-						$sql .= 'WHERE  Foo = ? AND Bar = ?'
+			$sql .= 'SELECT '. join(', ', $class->columns('Essential')  ."\n";
+			$sql .= 'FROM   '. $class->table                ."\n";
+			$sql .= 'WHERE  Foo = ? AND Bar = ?'
 
 						return $sql;
 					}
@@ -928,7 +967,7 @@ sub search {
     eval {
         my $dbh = $class->db_Main;
 		$sth = $dbh->prepare(<<"");
-		SELECT    ${\( join(', ', $class->columns) )}
+		SELECT    ${\( join(', ', $class->columns('Essential')) )}
         FROM      ${\( $class->table )}
         WHERE     $key = ?
 
@@ -963,9 +1002,9 @@ __PACKAGE__->make_sql('SearchLike',
 
                           # XXX Not sure if WHERE ? = ? is valid.
                           return <<"";
-                          SELECT    ${\( join(', ', $class->columns) )}
-                          FROM      ${\( $class->table )}
-                          WHERE     ? LIKE ?
+                   SELECT    ${\( join(', ', $class->columns('Essential')) )}
+                   FROM      ${\( $class->table )}
+                   WHERE     ? LIKE ?
 
                       }
                      );
@@ -978,7 +1017,7 @@ sub search_like {
     eval {
 		my $dbh = $class->db_Main;
         $sth = $dbh->prepare(<<"");
-		SELECT    ${\( join(', ', $class->columns) )}
+		SELECT    ${\( join(', ', $class->columns('Essential')) )}
         FROM      ${\( $class->table )}
         WHERE     $key LIKE ?
 
