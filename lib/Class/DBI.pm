@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.11 2000/05/02 04:41:53 schwern Exp $
+# $Id: DBI.pm,v 1.13 2000/05/24 06:58:27 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.09';
+$VERSION = '0.13';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
@@ -278,7 +278,6 @@ sub new {
     # You -must- have a table defined.
     assert( $self->table ) if DEBUG;
 
-    my $id;
     eval {
         # Enter a new row into the database containing our object's
         # information.
@@ -288,10 +287,7 @@ sub new {
                                        );
         $sth->execute(values %$data);
 
-        if( _safe_exists($data, $primary_col) ) {
-            $id = $data->{$primary_col};
-        }
-        else {
+        unless( _safe_exists($data, $primary_col) ) {
             $sth = $self->sql_LastInsertID;
             $sth->execute;
             $data->{$primary_col} = ($sth->fetch)[0];
@@ -305,7 +301,7 @@ sub new {
 
     # Create our object by ID because the database may have filled out
     # alot of default rows that we don't know about yet.
-    $self = $class->retrieve($id);
+    $self = $class->retrieve($data->{$primary_col});
 
     return $self;
 }
@@ -874,13 +870,15 @@ sub columns {
                        'setting columns.');
         }
 
-        if( $group eq 'All' ) {
-            $class->_mk_column_accessors(@columns);
-        }
+        $class->_mk_column_accessors(@columns);
 
         $class->normalize(\@columns);
 
-        $class_columns->{$group} = [@columns];
+        # Group all these columns together in their group and All.
+        # XXX Should this add to the group or overwrite?
+        $class_columns->{$group} = { map { ($_=>1) } @columns };
+        @{$class_columns->{All}}{@columns} = (1) x @columns 
+          unless $group eq 'All';
 
         # Force columns() to be overriden if necessary.
         $class->__columns($class_columns);
@@ -888,21 +886,10 @@ sub columns {
         return SUCCESS;
     }
     else {
-        # Build All if we have to.
-        if( $group eq 'All' and !exists $class_columns->{All} ) {
-            my %saw;
-            my @all_cols =
-              grep(!$saw{$_}++, 
-                   map { @{$class_columns->{$_}} } keys %$class_columns
-                  );
-
-            $class->columns('All', @all_cols);
-        }
-
         # Build Essential if not already built.
         if( $group eq 'Essential' and !exists $class_columns->{Essential} ) {
             # Careful to make a copy.
-            $class_columns->{Essential} = [@{$class_columns->{All}}];
+            $class_columns->{Essential} = { %{$class_columns->{All}} };
         }
 
         unless ( exists $class_columns->{$group} ) {
@@ -910,7 +897,7 @@ sub columns {
             Carp::carp("'$group' is not a column group of '$class'");
             return;
         } else {
-            return @{$class_columns->{$group}};
+            return keys %{$class_columns->{$group}};
         }
     }
 }
@@ -978,7 +965,7 @@ sub _get_col2group {
     # Build %__Col2Group if necessary.
     unless( keys %$col2group ) {
         while( my($group, $cols) = each %{$class->__columns} ) {
-            foreach my $col (@$cols) {
+            foreach my $col (keys %$cols) {
                 push @{$col2group->{$col}}, $group;
             }
         }

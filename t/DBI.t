@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.5 2000/05/02 00:27:51 schwern Exp $
+# $Id: DBI.t,v 1.6 2000/05/24 07:00:19 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -45,12 +45,24 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 34 }
+BEGIN { $Total_tests = 36 }
 
 
 package Film;
 use base qw(Class::DBI);
-Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+Film->columns('Essential', qw( Title ));
+Film->columns('Other',     qw( Director Rating NumExplodingSheep HasVomit ));
+
+# Test overriding.
+sub HasVomit {
+    my($self) = shift;
+    $self->_HasVomit_accessor(@_);
+}
+::ok( Film->can('_HasVomit_accessor'),                          'overriding');
+
+# Make sure a bug where methods with the normalized names keep popping up.
+::ok( !Film->can('hasvomit') && !Film->can('title'),
+                                                'normalized methods bug'    );
 
 # Tell Class::DBI a little about yourself.
 Film->table('Movies');
@@ -91,10 +103,11 @@ Film->set_db('Main', @{dbi}{'data src', 'user', 'password'},
 # Set up a table for ourselves.
 Film->db_Main->do(<<"SQL");
 CREATE TABLE Movies (
-         title      VARCHAR(255),
-         director   VARCHAR(80),
-         rating     CHAR(5),
-         numexplodingsheep      INTEGER
+        title                   VARCHAR(255),
+        director                VARCHAR(80),
+        rating                  CHAR(5),
+        numexplodingsheep       INTEGER,
+        hasvomit                CHAR(1)
 )
 SQL
 
