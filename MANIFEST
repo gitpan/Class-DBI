@@ -25,6 +25,7 @@ t/16-reserved.t
 t/17-data_type.t
 t/18-has_a.t
 t/19-set_sql.t
+t/21-iterator.t
 t/98-failure.t
 t/99-misc.t
 t/testlib/Actor.pm
@@ -42,4 +43,4 @@ t/testlib/MyStarLink.pm
 t/testlib/MyStarLinkMCPK.pm
 t/testlib/Order.pm
 t/testlib/OtherFilm.pm
-
+t/testlib/PgBase.pm

@@ -3,9 +3,6 @@ package MyStarLink;
 BEGIN { unshift @INC, './t/testlib'; }
 use base 'MyBase';
 
-use MyStar;
-use MyFilm;
-
 use strict;
 
 __PACKAGE__->set_table();

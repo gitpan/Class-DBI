@@ -8,7 +8,7 @@ use File::Temp qw/tempdir/;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 26);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 28);
 }
 
 use File::Temp qw/tempfile/;
@@ -33,10 +33,16 @@ sub wibble { shift->croak("Croak dies") }
 }
 
 {
+	my $warning;
 	local $SIG{__WARN__} = sub {
-		::like $_[0], qr/new.*clashes/, "Column clash warning";
+		$warning = $_[0];
 	};
+	no warnings 'once';
+	local *UNIVERSAL::wonka = sub { };
+	Holiday->columns(TEMP => 'wonka');
+	::like $warning, qr/wonka.*clashes/, "Column clash warning for inherited";
 	Holiday->columns(Primary => 'new');
+	::like $warning, qr/new.*clashes/, "Column clash warning with CDBI";
 }
 
 {
@@ -90,6 +96,21 @@ sub wibble { shift->croak("Croak dies") }
 }
 
 package main;
+
+{
+	package Holiday::Camp;
+	use base 'Holiday';
+
+	__PACKAGE__->table("holiday");
+	__PACKAGE__->add_trigger(before_create => sub { 
+		my $self = shift;
+		$self->_croak("Problem with $self\n");
+	});
+
+	package main;
+	eval { Holiday::Camp->create({}) };
+	like $@, qr/Problem with Holiday/, '$self stringifies with no PK values';
+}
 
 eval { my $foo = Holiday->retrieve({ id => 1 }) };
 like $@, qr/retrieve a reference/, "Can't retrieve a reference";

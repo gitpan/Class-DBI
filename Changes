@@ -1,243 +1,291 @@
+0.95 Fri Jan  9 2004
+
+	Pre-Requisites
+    - Now requires Perl 5.6 or greater
+
+  New Functionality
+    - constrain_column() adds simple per-column constraints
+    - has_many now attempts to work out the reference column by
+      examining the foreign class's has_a() declarations, making the 3rd
+      argument to has_many mostly obsolete.
+    - __TABLE(Other::Class)__ now interpolates the table from the other
+      class, allowing avoidance of hard-coding other table names.
+    - __ESSENTIAL(alias)__ now prepends the table alias supplied to the
+      start of each column name, for avoiding column name clashes.
+    - __JOIN(alias alias)__ now inserts the SQL to join the two tables.
+    - might_have now allows creating the remote object through a simple
+      set of the accessor. [David Jack Olrik]
+    - Iterators can now be reset() [Tatsuhiko Miyagawa]
+
+  Documentation
+    - count_all, maximum_value_of and minimum_value_of are now
+      documented (along with how to implement similar methods)
+
+  Bug Fixes
+    - Allow retrieve() to take unnormalised columns, as with search [Connie]
+    - Handle stringification before Primary Key(s) are filled 
+    - search() can take an overridden accessor name as a key
+    - MultiColumn primary keys working better with ColumnGrouper [Perrin
+      Hawkins, Paul Makepeace, and Charles Bailey]
+
+  Deprecations
+    - _single_value_select and _single_row_select deprecated in favour
+      of new select_val and select_row methods in Ima::DBI
+
+  Other
+    - Class::Accessor can no longer be used directly to add other attributes.
+      TEMP columns should be used for this.
+    - Ensure all croaks internally go through _croak() [Richard Piacentini]
+    - deleted objects now blessed into Class::DBI::Object::Has::Been::Deleted
+    - Lots of doc patches [Jesse Sheidlower, Paul Makepeace]
+    - All internal attribute accesses now go through helper methods,
+      as first step to changing how all this works.
+    - set_sql now passes all arguments up to Ima::DBI (so you can turn
+      off caching if required) [gfalck]
+    - We now warn about column names clashing with any inherited methods,
+      not just ones defined in Class::DBI itself [Dan Thill]
+    - Silence some test warnings reported by Paul Makepeace
+
 0.94  Wed Aug 27 2003
 
-	New Functionality
-		- allow has_a() columns to hold NULL values (Dominic Mitchell)
-		- cascading deletions can be turned off by passing argument to
-		  has_many setup: no_cascade_delete => 1 (undocumented/untested)
-		  [now implemented as a trigger]
-		- classes and objects can be marked as read_only (experimental and
-		  undocumented, although tested)
+  New Functionality
+    - allow has_a() columns to hold NULL values (Dominic Mitchell)
+    - cascading deletions can be turned off by passing argument to
+      has_many setup: no_cascade_delete => 1 (undocumented/untested)
+      [now implemented as a trigger]
+    - classes and objects can be marked as read_only (experimental and
+      undocumented, although tested)
 
-	Documentation
-		- no longer refer to Class::DBI::Join, which is dead
-		- warn about inflating a primary key using has_a
-		- rewrite of docs on transactions
-		- numerous small tweaks from Jay Strauss, Alexander Karelas and Brad
-		  Bowman
-		- redocument dbi_commit and dbi_rollback that have vanished...
+  Documentation
+    - no longer refer to Class::DBI::Join, which is dead
+    - warn about inflating a primary key using has_a
+    - rewrite of docs on transactions
+    - numerous small tweaks from Jay Strauss, Alexander Karelas and Brad
+      Bowman
+    - redocument dbi_commit and dbi_rollback that have vanished...
 
-	Bug Fixes
-		- make sequences work again (Dominic Mitchell) [now with tests!]
-		- interpolation of __TABLE__ etc now happens globally, rather than
-		  only once [Corion]
-		- might_have now properly does a cascading delete
-		- Fixed problem where we can't update an object which might_have a
-		  relationship, but doesn't.
-		- might_have's tentative, but broken, support for MCPK has been
-		  removed.
-		- Increase Class::Accessor pre-requisite to 0.18 to fix strange bug
-		  reported by Casey West.
-		- Make sure we don't alter the hashref being passed to create()
-		- The after_create() trigger is now called after the object is
-		  emptied, and will thus be able to see objects in has_a columns
-		  (by reloading from the DB) [If you were using this
-		  trigger to alter the columns to be cleaned out this
-		  can (for now) be done using the 'create' trigger,
-		  although that's deprecated. Let me know if you really
-		  need this ability.
+  Bug Fixes
+    - make sequences work again (Dominic Mitchell) [now with tests!]
+    - interpolation of __TABLE__ etc now happens globally, rather than
+      only once [Corion]
+    - might_have now properly does a cascading delete
+    - Fixed problem where we can't update an object which might_have a
+      relationship, but doesn't.
+    - might_have's tentative, but broken, support for MCPK has been
+      removed.
+    - Increase Class::Accessor pre-requisite to 0.18 to fix strange bug
+      reported by Casey West.
+    - Make sure we don't alter the hashref being passed to create()
+    - The after_create() trigger is now called after the object is
+      emptied, and will thus be able to see objects in has_a columns
+      (by reloading from the DB) [If you were using this
+      trigger to alter the columns to be cleaned out this
+      can (for now) be done using the 'create' trigger,
+      although that's deprecated. Let me know if you really
+      need this ability.
 
-	Deprecations
-		- move() is deprecated. The concept is broken and will be removed
-		  unless someone convinces me to keep it.
-		- normalize* are no longer necessary, due to the new Column objects,
-		  which store their normalized and unnormalize form. (Calling these
-		  will have no effect, other than a warning).
-		- has_column deprecated in favour of find_column
+  Deprecations
+    - move() is deprecated. The concept is broken and will be removed
+      unless someone convinces me to keep it.
+    - normalize* are no longer necessary, due to the new Column objects,
+      which store their normalized and unnormalize form. (Calling these
+      will have no effect, other than a warning).
+    - has_column deprecated in favour of find_column
 
-	Other
-		- init() now takes hash to instantiate with (Tim Bunce)
-		- Rewrite of _require_class, with better short-circuiting and error
-		  message reporting (Tim Bunce)
-		- new Class::DBI::Column to represent a column. Some functionality
-		  moved from ColumnGrouper to here.
-		- mutator and accessor name overrides now stored in column, and not
-		  looked up every time.
-		- attempt to trap and propogate all DBI failures 
+  Other
+    - init() now takes hash to instantiate with (Tim Bunce)
+    - Rewrite of _require_class, with better short-circuiting and error
+      message reporting (Tim Bunce)
+    - new Class::DBI::Column to represent a column. Some functionality
+      moved from ColumnGrouper to here.
+    - mutator and accessor name overrides now stored in column, and not
+      looked up every time.
+    - attempt to trap and propogate all DBI failures 
 
 0.93  Wed Jul 2 2003
 
-	New Functionality
-		- Multi-column primary keys are now supported. [with huge thanks to Tim
-		  Bunce]
-		- New syntax for inbuilt SQL
-		- classes can control stringification via as_string() and
-		  stringify_column().
-		- set_sql automatically translates __TABLE__, __ESSENTIAL__, and
-		  __IDENTIFIER__
+  New Functionality
+    - Multi-column primary keys are now supported. [with huge thanks to Tim
+      Bunce]
+    - New syntax for inbuilt SQL
+    - classes can control stringification via as_string() and
+      stringify_column().
+    - set_sql automatically translates __TABLE__, __ESSENTIAL__, and
+      __IDENTIFIER__
 
-	Performance Improvements
-		- use Storable's dclone() rather than Data::Dumper's deepcopy
+  Performance Improvements
+    - use Storable's dclone() rather than Data::Dumper's deepcopy
 
-	Documentation
-		- document the order_by option to search() [Drew Taylor]
-		- fix the documentation of the DBI connect string [Phil Crow]
-		- document working with pre_create triggers
-		- add a note on dynamically generating a database connection
-		- avoid using (shift => $val) due to quoting issues! [Simon Wilcox]
-		- refer to Class::DBI::Oracle for sequences [Jay Strauss]
-		- give better explanation for construct() [Jay Strauss]
-		- document get/set with multiple arguments [Jay Strauss]
-		- more detailed description of arguments to has_a()
+  Documentation
+    - document the order_by option to search() [Drew Taylor]
+    - fix the documentation of the DBI connect string [Phil Crow]
+    - document working with pre_create triggers
+    - add a note on dynamically generating a database connection
+    - avoid using (shift => $val) due to quoting issues! [Simon Wilcox]
+    - refer to Class::DBI::Oracle for sequences [Jay Strauss]
+    - give better explanation for construct() [Jay Strauss]
+    - document get/set with multiple arguments [Jay Strauss]
+    - more detailed description of arguments to has_a()
 
-	Bug Fixes
-		- Bug with setting driver defaults [Jay Strauss + Schwern]
-		- Bug where selecting a column that was only in 'All' group also
-		  attempted to fetch any TEMP columns. [Dominic Mitchell]
+  Bug Fixes
+    - Bug with setting driver defaults [Jay Strauss + Schwern]
+    - Bug where selecting a column that was only in 'All' group also
+      attempted to fetch any TEMP columns. [Dominic Mitchell]
 
-	Removal of Functionality
-		- Undocumented ordered_search method has been removed in favour of
-		  order_by option to search.
-		- Undocumented make_filter method removed in favour of add_constructor
-		- add_constructor no longer does (undocumented) %s substitutions
-		- (undocumented) single_value_select() method no longer takes raw
-		  SQL fragments.
+  Removal of Functionality
+    - Undocumented ordered_search method has been removed in favour of
+      order_by option to search.
+    - Undocumented make_filter method removed in favour of add_constructor
+    - add_constructor no longer does (undocumented) %s substitutions
+    - (undocumented) single_value_select() method no longer takes raw
+      SQL fragments.
 
 0.92 Sat Apr 12 2003
 
-	New Functionality
-		- classes named after reserved SQL words can now supply a
-		  table_alias either directly, or as a second argument to table().
+  New Functionality
+    - classes named after reserved SQL words can now supply a
+      table_alias either directly, or as a second argument to table().
 
-	Deprecations
-		- hasa() now calls has_a() with a warning. It will disappear
-		  completely in a forthcoming release.
-		- issue warning on use of old hasa_list
+  Deprecations
+    - hasa() now calls has_a() with a warning. It will disappear
+      completely in a forthcoming release.
+    - issue warning on use of old hasa_list
 
-	Bug Fixes
-		- class data properly propagates (i.e. two classes can once again
-		  have has_a relationships of the same name) [Miyagawa + Marty]
-		- only deflate columns that are changing on update.
+  Bug Fixes
+    - class data properly propagates (i.e. two classes can once again
+      have has_a relationships of the same name) [Miyagawa + Marty]
+    - only deflate columns that are changing on update.
 
-	Other
-		- croak if update() does not change exactly one row [Tim Bunce].
-		  (Not yet live)
-		- The Essential column group now defaults to Primary rather than
-		  All. 
+  Other
+    - croak if update() does not change exactly one row [Tim Bunce].
+      (Not yet live)
+    - The Essential column group now defaults to Primary rather than
+      All. 
 
 0.91 Sat Mar  8 2003
 
-	New Functionality
-		- has_many can now take an extra set of search parameters at execution
-		- has_many mapping method can now be a list
-		- Class->delete(@search_args) deletes all results matching search
-		  criteria.  
-		- search can take a final hash of arguments. Currently the only one
-		  honoured is 'order_by'
-		- searches deflate objects passed as search values as with has_a()
-		- iterators can be slice()d
-		- classes can provide their own iterators 
-		- columns in the TEMP column group will be non-persistent
-		- set_sql automatically sets up a search_ method for that SQL
-		- constraints can cross-check using new syntax, and per_column
-		  trigger points.
-		- the after_update trigger can modify the list of changed columns
-			to change refresh behaviour 
-		- Can delete via the iterator: $cd->artists->delete_all
-		- New Class::DBI::Query module for dynamically constructing queries
-		- Standardised exception handling (thanks to Tim Bunce)
-			- on_failed_create no longer needed
-		- overloading of objects
-		- autoincrements work with SQLite
+  New Functionality
+    - has_many can now take an extra set of search parameters at execution
+    - has_many mapping method can now be a list
+    - Class->delete(@search_args) deletes all results matching search
+      criteria.  
+    - search can take a final hash of arguments. Currently the only one
+      honoured is 'order_by'
+    - searches deflate objects passed as search values as with has_a()
+    - iterators can be slice()d
+    - classes can provide their own iterators 
+    - columns in the TEMP column group will be non-persistent
+    - set_sql automatically sets up a search_ method for that SQL
+    - constraints can cross-check using new syntax, and per_column
+      trigger points.
+    - the after_update trigger can modify the list of changed columns
+      to change refresh behaviour 
+    - Can delete via the iterator: $cd->artists->delete_all
+    - New Class::DBI::Query module for dynamically constructing queries
+    - Standardised exception handling (thanks to Tim Bunce)
+      - on_failed_create no longer needed
+    - overloading of objects
+    - autoincrements work with SQLite
 
-	Deprecations
-		- commit() and autocommit() are now update() and autoupdate()
-		- rollback() is now discard_changes()
-		- hasa() now warns if used
-		- trigger points create() and delete() warn when called
-		- trigger point on_setting no longer exists
+  Deprecations
+    - commit() and autocommit() are now update() and autoupdate()
+    - rollback() is now discard_changes()
+    - hasa() now warns if used
+    - trigger points create() and delete() warn when called
+    - trigger point on_setting no longer exists
 
-	Optimisation
-		- has_a lazy inflates other Class::DBI instances 
-		- roll our own require rather than depending on UNIVERSAL::require
-		 (thanks to Tim Bunce)
-		- Don't add __Changed = {} to every object on creation,
-			just autovivify it on demand. (Tim)
-		- Avoid calling $self->primary_column in a loop in create() (Tim)
-		- Use fetchrow_arrayref instead of fetchrow_array. (Tim)
-		- Return from _deflated_column earlier if value is not a ref. (Tim)
-		- Use $sth->{NAME_lc} instead of $sth->{NAME}. (Tim)
-		- Optmize _normalized and normalize. (Tim)
-		- optimise various calls to columns() (Tim)
-		- don't reflesh after an update - defer for lazy loading
-		- Iterator no longer inherits from Class::DBI itself.
+  Optimisation
+    - has_a lazy inflates other Class::DBI instances 
+    - roll our own require rather than depending on UNIVERSAL::require
+     (thanks to Tim Bunce)
+    - Don't add __Changed = {} to every object on creation,
+      just autovivify it on demand. (Tim)
+    - Avoid calling $self->primary_column in a loop in create() (Tim)
+    - Use fetchrow_arrayref instead of fetchrow_array. (Tim)
+    - Return from _deflated_column earlier if value is not a ref. (Tim)
+    - Use $sth->{NAME_lc} instead of $sth->{NAME}. (Tim)
+    - Optmize _normalized and normalize. (Tim)
+    - optimise various calls to columns() (Tim)
+    - don't reflesh after an update - defer for lazy loading
+    - Iterator no longer inherits from Class::DBI itself.
 
-	Bug Fixes
-		- has_many maps now work as iterators
-		- columns only report as being in group 'All' if they're in no
-		  other columns (so lazy loading works in those cases!)
-		- calling create with a primary key of zero no longer attempts to 
-			use auto_increment (Tim Bunce)
+  Bug Fixes
+    - has_many maps now work as iterators
+    - columns only report as being in group 'All' if they're in no
+      other columns (so lazy loading works in those cases!)
+    - calling create with a primary key of zero no longer attempts to 
+      use auto_increment (Tim Bunce)
 
-	Other
-		- reference Class::DBI::AbstractSearch
-		- retrieve_from_sql removes any leading 'WHERE' 
-		- inflate handles overloading better (thanks to Tim Bunce)
-		- Avoid boolean test on object, use defined instead.
-		- Tweak create() to prepare for possible caching of colmap info.
-		- better documentation on transactions
-		- test suite now uses DBD::SQLite instead of DBD::CSV
-		- consolidated some test scripts
+  Other
+    - reference Class::DBI::AbstractSearch
+    - retrieve_from_sql removes any leading 'WHERE' 
+    - inflate handles overloading better (thanks to Tim Bunce)
+    - Avoid boolean test on object, use defined instead.
+    - Tweak create() to prepare for possible caching of colmap info.
+    - better documentation on transactions
+    - test suite now uses DBD::SQLite instead of DBD::CSV
+    - consolidated some test scripts
 
 0.90 Wed Nov 27 GMT 2002
-		- hasa and associated_class merged (and deprecated) into has_a
-			- has_many therefore no longer sets up reciprocal hasa
-		- allow search() and search_like() to take multiple columns
-		- added find_or_create()
-		- add_constructor() is now preferred to make_filter()
-		- added retrieve_from_sql() for inline SQL
-		- documented running arbitrary SQL and using sth_to_objects to 
-			convert these to objects. (Making sth_to_objects public too)
-		- has_many can now call a mapping method on the results
-			(for simpler many-to-many joins, for example)
-		- has_many adds an 'add_to_<whatevers>' method 
-			e.g.  CD->has_many(tracks => Track);
-			now adds not just 'tracks' method, but also 'add_to_tracks'.
-			(thanks to Michael Styer)
-		- try to guess table name if none given
-		- speed up iterators (thanks to Tom Renfro)
-		- added (undocumented) data_type method
-			(thanks to Tatsuhiko Miyagawa)
-		- renamed column_type() to associated_class()
-		- added references to Class::DBI::SQLite, Class::DBI::Pg,
-			and Class::Join
-		- before_create trigger can now modify object itself
-		- uses UNIVERSAL::require instead of rolling our own
-		- marked primary_key(), is_column(), add_hook() as deprecated
-		- changed _ids_to_objects to receieve listref, rather than list
-			to cope with weird bug in 5.005_03 (thanks to Tatsuhiko Miyagawa)
-		- warn if column name clashes with built-in method
-		- third argument to has_many is now optional, defaulting to our
-		  'class-name' (undocumented)
-		- provide normalised method names if appropriate (i.e. a Film column
-		  will give us methods $obj->Film and $obj->film). This previously
-		  happened inconsistently.
-		- split most of the column related code to Class::DBI::Columns
-		- remove dependency on Class::Fields
-		- reference the new Class::DBI mailing lists
-		- Give better errors if no database connection set up 
-			(thanks to Simon Cozens)
-		- A failed create now calls $class->on_failed_create, which by
-		  default dies, but can be made to do whatever you like. 
+    - hasa and associated_class merged (and deprecated) into has_a
+      - has_many therefore no longer sets up reciprocal hasa
+    - allow search() and search_like() to take multiple columns
+    - added find_or_create()
+    - add_constructor() is now preferred to make_filter()
+    - added retrieve_from_sql() for inline SQL
+    - documented running arbitrary SQL and using sth_to_objects to 
+      convert these to objects. (Making sth_to_objects public too)
+    - has_many can now call a mapping method on the results
+      (for simpler many-to-many joins, for example)
+    - has_many adds an 'add_to_<whatevers>' method 
+      e.g.  CD->has_many(tracks => Track);
+      now adds not just 'tracks' method, but also 'add_to_tracks'.
+      (thanks to Michael Styer)
+    - try to guess table name if none given
+    - speed up iterators (thanks to Tom Renfro)
+    - added (undocumented) data_type method
+      (thanks to Tatsuhiko Miyagawa)
+    - renamed column_type() to associated_class()
+    - added references to Class::DBI::SQLite, Class::DBI::Pg,
+      and Class::Join
+    - before_create trigger can now modify object itself
+    - uses UNIVERSAL::require instead of rolling our own
+    - marked primary_key(), is_column(), add_hook() as deprecated
+    - changed _ids_to_objects to receieve listref, rather than list
+      to cope with weird bug in 5.005_03 (thanks to Tatsuhiko Miyagawa)
+    - warn if column name clashes with built-in method
+    - third argument to has_many is now optional, defaulting to our
+      'class-name' (undocumented)
+    - provide normalised method names if appropriate (i.e. a Film column
+      will give us methods $obj->Film and $obj->film). This previously
+      happened inconsistently.
+    - split most of the column related code to Class::DBI::Columns
+    - remove dependency on Class::Fields
+    - reference the new Class::DBI mailing lists
+    - Give better errors if no database connection set up 
+      (thanks to Simon Cozens)
+    - A failed create now calls $class->on_failed_create, which by
+      default dies, but can be made to do whatever you like. 
 
 0.89 Mon Jun 24 2002
-		- allow has_many to not have a relationship 
-			(Thanks to Brian Parker)
-		- renamed (undocumented) min() and max() to 
-		  minimum_value_of() and maximum_value_of()
-		- croak() and carp() deprecated in favour of _croak() and _carp()
-		- primary() and essential() deprecated in favour of 
-		  primary_key() and _essential()/columns(essential);
-		- normalize_one() deprecated in favour of _normalize_one
-		- If a 'might-have' link points to nothing, don't give a 'Can't call
-		  method' error
-		- better reporting on errors from create etc.
-		- better reporting when you incorrectly set through hasa()
-		- handle primary/foreign key value of zero better
-			(reported by Jim O'Brien)
-		- added (undocumented) 'column_type' based on ideas from
-		  Matthew Simon Cavalletto and Tatsuhiko Miyagawa.
-		- brought delete triggers in line with documentation
-			(reported by Barry Hoggard, fixed by Tatsuhiko Miyagawa)
+    - allow has_many to not have a relationship 
+      (Thanks to Brian Parker)
+    - renamed (undocumented) min() and max() to 
+      minimum_value_of() and maximum_value_of()
+    - croak() and carp() deprecated in favour of _croak() and _carp()
+    - primary() and essential() deprecated in favour of 
+      primary_key() and _essential()/columns(essential);
+    - normalize_one() deprecated in favour of _normalize_one
+    - If a 'might-have' link points to nothing, don't give a 'Can't call
+      method' error
+    - better reporting on errors from create etc.
+    - better reporting when you incorrectly set through hasa()
+    - handle primary/foreign key value of zero better
+      (reported by Jim O'Brien)
+    - added (undocumented) 'column_type' based on ideas from
+      Matthew Simon Cavalletto and Tatsuhiko Miyagawa.
+    - brought delete triggers in line with documentation
+      (reported by Barry Hoggard, fixed by Tatsuhiko Miyagawa)
 
 0.88 Beltane 2000
     - fix for hasa() and create() with modified accessor/mutator names

@@ -36,6 +36,7 @@ ok(
 	ok $pj = $btaste->Director, "Bad taste now hasa() director";
 	isa_ok $pj => 'Director';
 	{
+		no warnings 'redefine';
 		local *Ima::DBI::st::execute = sub { ::fail("Shouldn't need to query db"); };
 		is $pj->id, 'Peter Jackson', 'ID already stored';
 	}

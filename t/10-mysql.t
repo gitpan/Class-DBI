@@ -4,12 +4,12 @@ use strict;
 use Test::More;
 
 eval { require Date::Simple };
-plan skip_all => "Need Date::Simple for this test ($@)" if $@;
+plan skip_all => "Need Date::Simple for this test" if $@;
 
 eval { require 't/testlib/MyFoo.pm' };
-plan skip_all => "Need MySQL for this test ($@)" if $@;
+plan skip_all => "Need MySQL for this test" if $@;
 
-plan tests => 60;
+plan tests => 64;
 
 package main;
 
@@ -38,13 +38,7 @@ is MyFoo->count_all, 4, "count_all()";
 is MyFoo->minimum_value_of("val"), 4, "min()";
 is MyFoo->maximum_value_of("val"), 7, "max()";
 
-{
-	local $SIG{__WARN__} = sub { warn $_ for grep { !/method already exists/ } @_ };
-	require './t/testlib/MyStarLink.pm';
-	require './t/testlib/MyFilm.pm';
-	require './t/testlib/MyStar.pm';
-	require './t/testlib/MyStarLinkMCPK.pm';
-}
+require './t/testlib/MyStarLinkMCPK.pm';
 
 ok(my $f1 = MyFilm->create({ title => "Veronique" }), "Create Veronique");
 ok(my $f2 = MyFilm->create({ title => "Red" }),       "Create Red");
@@ -58,19 +52,36 @@ ok(my $l2 = MyStarLink->create({ film => $f1, star => $s2 }), "Link 2");
 ok(my $l3 = MyStarLink->create({ film => $f2, star => $s1 }), "Link 3");
 ok(my $l4 = MyStarLink->create({ film => $f2, star => $s3 }), "Link 4");
 
-ok(my $lm1 = MyStarLinkMCPK->create({ film => $f1, star => $s1 }), "Link MCPK 1");
-ok(my $lm2 = MyStarLinkMCPK->create({ film => $f1, star => $s2 }), "Link MCPK 2");
-ok(my $lm3 = MyStarLinkMCPK->create({ film => $f2, star => $s1 }), "Link MCPK 3");
-ok(my $lm4 = MyStarLinkMCPK->create({ film => $f2, star => $s3 }), "Link MCPK 4");
+ok(my $lm1 = MyStarLinkMCPK->create({ film => $f1, star => $s1 }),
+	"Link MCPK 1");
+ok(my $lm2 = MyStarLinkMCPK->create({ film => $f1, star => $s2 }),
+	"Link MCPK 2");
+ok(my $lm3 = MyStarLinkMCPK->create({ film => $f2, star => $s1 }),
+	"Link MCPK 3");
+ok(my $lm4 = MyStarLinkMCPK->create({ film => $f2, star => $s3 }),
+	"Link MCPK 4");
+
+{    # Warnings for scalar context?
+	my $err = "";
+	local $SIG{__WARN__} = sub { $err = $_[0]; };
+	$err = "";
+	1 if MyStarLinkMCPK->_essential;
+	is $err, "", "_essential() tolerates scalar context with multi-column key";
+
+	1 if MyStarLinkMCPK->primary_column;
+	like $err, qr/fetching in scalar context/, "but primary_column() complains";
+}
 
 # try to create one with duplicate primary key
 my $lm5 = eval { MyStarLinkMCPK->create({ film => $f2, star => $s3 }) };
 ok(!$lm5, "Can't create duplicate");
-ok($@ =~ /^Can't insert .* duplicate/i, "Duplicate create caused exception" );
+ok($@ =~ /^Can't insert .* duplicate/i, "Duplicate create caused exception");
 
 # create one to delete
-ok(my $lm6 = MyStarLinkMCPK->create({ film => $f2, star => $s2 }), "Link MCPK 5");
-ok(my $lm7 = MyStarLinkMCPK->retrieve(film => $f2, star => $s2), "Retrieve from table");
+ok(my $lm6 = MyStarLinkMCPK->create({ film => $f2, star => $s2 }),
+	"Link MCPK 5");
+ok(my $lm7 = MyStarLinkMCPK->retrieve(film => $f2, star => $s2),
+	"Retrieve from table");
 ok($lm7 && $lm7->delete, "Delete from table");
 ok(!MyStarLinkMCPK->retrieve(film => $f2, star => $s2), "No longer in table");
 
@@ -101,7 +112,7 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 }
 
 {
-	ok MyStar->has_many(filmids => [ MyStarLink => 'film', 'id' ] => 'star'),
+	ok MyStar->has_many(filmids => [ MyStarLink => 'film', 'id' ]),
 		"**** Multi-map";
 	my @filmid = $s1->filmids;
 	ok !ref $filmid[0], "Film-id is not a reference";
@@ -111,9 +122,9 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 	is $first, $filmid[0], "But it's the same as filmid[0]";
 }
 
-{ # cascades correctly
-	my $lenin = MyFilm->create({ title => "Leningrad Cowboys Go America" });
-	my $pimme = MyStar->create({ name => "Pimme Korhonen" });
+{    # cascades correctly
+	my $lenin  = MyFilm->create({ title    => "Leningrad Cowboys Go America" });
+	my $pimme  = MyStar->create({ name     => "Pimme Korhonen" });
 	my $cowboy = MyStarLink->create({ film => $lenin, star => $pimme });
 	$lenin->delete;
 	is MyStar->search(name => 'Pimme Korhonen')->count, 1, "Pimme still exists";
@@ -121,7 +132,7 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 }
 
 {
-	ok MyStar->has_many(filmids_mcpk => [ MyStarLinkMCPK => 'film', 'id' ] => 'star'),
+	ok MyStar->has_many(filmids_mcpk => [ MyStarLinkMCPK => 'film', 'id' ]),
 		"**** Multi-map via MCPK";
 	my @filmid = $s1->filmids_mcpk;
 	ok !ref $filmid[0], "Film-id is not a reference";
@@ -138,9 +149,25 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 	is $f0->id, 0, "ID of 0";
 }
 
-{ # create doesn't mess with my hash.
-	my %info = ( Name => "Catherine Wilkening" );
+{    # create doesn't mess with my hash.
+	my %info = (Name => "Catherine Wilkening");
 	my $cw = MyStar->find_or_create(\%info);
 	is scalar keys %info, 1, "Our hash still has only one key";
 	is $info{Name}, "Catherine Wilkening", "Still same name";
 }
+
+{
+	MyFilm->set_sql(
+		retrieve_all_sorted => "SELECT __ESSENTIAL__ FROM __TABLE__ ORDER BY %s");
+
+	sub MyFilm::retrieve_all_sorted_by {
+		my ($class, $order_by) = @_;
+		return $class->sth_to_objects($class->sql_retrieve_all_sorted($order_by));
+	}
+
+	my @all = MyFilm->retrieve_all_sorted_by("title");
+	is @all, 3, "3 films";
+	ok $all[2]->title gt $all[1]->title && $all[1]->title gt $all[0]->title,
+		"sorted by title";
+}
+

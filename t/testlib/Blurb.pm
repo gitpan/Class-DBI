@@ -21,20 +21,10 @@ sub create_blurbs_table {
 	$class->db_Main->do(
 		qq{
      CREATE TABLE Blurbs (
-        title                   VARCHAR(255),
+        title                   VARCHAR(255) PRIMARY KEY,
         blurb                   VARCHAR(255)
     )
   }
-	);
-}
-
-sub make_bad_taste {
-	my $class = shift;
-	$class->create(
-		{
-			Title => 'Bad Taste',
-			Blurb => 'Some interesting text about Bad Taste',
-		}
 	);
 }
 

@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 16);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 18);
 }
 
 INIT {
@@ -31,10 +31,14 @@ Film->might_have(info => Blurb => qw/blurb/);
 	eval { $bt->update };
 	is $@, '', "No problems updating when don't have";
 	is $bt->rating, 16, "Updated OK";
+
+	is $bt->blurb, undef, "Bad taste has no blurb";
+	$bt->blurb("Wibble bar");
+	$bt->update;
+	is $bt->blurb, "Wibble bar", "And we can write the info";
 }
 
 {
-	Blurb->make_bad_taste;
 	my $bt   = Film->retrieve('Bad Taste');
 	my $info = $bt->info;
 	isa_ok $info, 'Blurb';

@@ -115,6 +115,21 @@ sub group_cols {
 	@{ $self->{_groups}->{$group} || [] };
 }
 
+sub groups_for {
+	my ($self, @cols) = @_;
+	return uniq(map $_->groups, @cols);
+}
+
+sub columns_in {
+	my ($self, @groups) = @_;
+	return uniq(map $self->group_cols($_), @groups);
+}
+
+sub uniq {
+	my %tmp;
+	return grep !$tmp{$_}++, @_;
+}
+
 =head2 all_columns
 
 	my @all = $colg->all_columns;
@@ -155,7 +170,8 @@ sub primary {
 sub essential {
 	my $self = shift;
 	my @cols = $self->group_cols('Essential');
-	return @cols ? @cols : $self->primary;
+	@cols = $self->primary unless @cols;
+	return @cols;
 }
 
 1;

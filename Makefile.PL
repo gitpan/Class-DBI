@@ -7,7 +7,7 @@ $PACKAGE = 'Class::DBI';
 ($PACKAGE_FILE) = $PACKAGE =~ /::([^:]+)/;
 $LAST_API_CHANGE = 0.93;
 
-require 5.00502;
+require 5.006;
 
 eval "require $PACKAGE";
 
@@ -19,6 +19,13 @@ version $LAST_API_CHANGE!  Please check carefully if you are upgrading
 from a version older than $LAST_API_CHANGE.
 
 Significant changes:
+
+  0.95 - Breaking the encapsulation of an object (e.g. assuming that 
+         the value for the 'title' column will be stored internally in
+         $object->{'title'} will stop working in a forthcoming release.
+         Relying on this behaviour is a Bad Thing, and you should fix it 
+         now! (This also applies to before_create triggers, where 
+         previously it was the supported approach.)
 
   0.93 - Undocumented ordered_search() method no longer exists
        - Undocumented make_filter() method no longer exists
@@ -60,11 +67,11 @@ WriteMakefile(
 		'Class::Data::Inheritable' => '0.02',
 		'Class::Trigger'           => '0.07',
 		'File::Temp'               => '0.12',
-		'Ima::DBI'                 => '0.29',
+		'Ima::DBI'                 => '0.30',
 		'List::Util'               => '1.00',
 		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',
-		'UNIVERSAL::moniker'       => '0.02',
+		'UNIVERSAL::moniker'       => '0.06',
   },
 	dist              => { 
 		COMPRESS   => 'gzip -9',

@@ -15,6 +15,8 @@ Class::DBI::Iterator - Iterate over Class::DBI search results
 
 	my @slice = $it->slice(10,19);
 
+	$it->reset;
+
 	$it->delete_all;
 
 =head1 DESCRIPTION
@@ -78,7 +80,7 @@ sub next {
 
 sub first {
 	my $self = shift;
-	$self->{_place} = 0;
+	$self->reset;
 	return $self->next;
 }
 
@@ -103,5 +105,7 @@ sub delete_all {
 	$self->{_data} = [];
 	1;
 }
+
+sub reset { shift->{_place} = 0 }
 
 1;

@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 12);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 21);
 }
 
 INIT {
@@ -57,3 +57,55 @@ my $fred = Film->create({ Rating => '12' });
 # this test is a bit problematical because we don't supply a primary key
 # to the create() and the table doesn't use auto_increment or a sequence.
 ok $fred, "Got fred";
+
+{
+	ok +Film->constrain_column(rating => [qw/U PG 12 15 19/]),
+		"constraint_column";
+	my $narrower = eval { Film->create({ Rating => 'Uc' }) };
+	like $@, qr/fails.*constraint/, "Fails listref constraint";
+	my $ok = eval { Film->create({ Rating => 'U' }) };
+	is $@, '', "Can create with rating U";
+}
+
+{
+	ok +Film->constrain_column(title => qr/The/), "constraint_column";
+	my $inferno = eval { Film->create({ Title => 'Towering Infero' }) };
+	like $@, qr/fails.*constraint/, "Can't create towering inferno";
+	my $the_inferno = eval { Film->create({ Title => 'The Towering Infero' }) };
+	is $@, '', "But can create THE towering inferno";
+}
+
+{
+
+	sub Film::_constrain_by_untaint {
+		my ($class, $col, $string, $type) = @_;
+		$class->add_constraint(
+			untaint => $col => sub {
+				my ($value, $self, $column_name, $changing) = @_;
+				$value eq "today" ? $changing->{$column_name} = "2001-03-03" : 0;
+			}
+		);
+	}
+	eval { Film->constrain_column(codirector => Untaint => 'date') };
+	is $@, '', 'Can constrain with untaint';
+	my $freeaa =
+		eval { Film->create({ title => "The Freaa", codirector => 'today' }) };
+	is $@, '', "Can create codirector";
+	is $freeaa->codirector, '2001-03-03', "Set the codirector";
+}
+
+__DATA__
+
+use CGI::Untaint;
+
+sub _constrain_by_untaint {
+	my ($class, $col, $string, $type) = @_;
+	$class->add_constraint(untaint => $col => sub {
+		my ($value, $self, $column_name, $changing) = @_;
+		my $h = CGI::Untaint->new({ %$changing });
+		return unless my $val = $h->extract("-as_$type" => $column_name);
+		$changing->{$column_name} = $val;
+		return 1;
+	});
+}
+

@@ -9,10 +9,11 @@ use MyFilm;
 use strict;
 
 # This is a many-to-many mapping table that uses the two foreign keys
-# as it's own primary key - there's no extra 'auto-inc' column here
+# as its own primary key - there's no extra 'auto-inc' column here
 
 __PACKAGE__->set_table();
 __PACKAGE__->columns(Primary => qw/film star/);
+__PACKAGE__->columns(All     => qw/film star/);
 __PACKAGE__->has_a(film => 'MyFilm');
 __PACKAGE__->has_a(star => 'MyStar');
 

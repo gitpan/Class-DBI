@@ -24,36 +24,36 @@ ok(eq_set([ sort Lazy->columns('vertical') ],  [qw/oop opop/]),  "vertical");
 ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]), "All");
 
 {
-	my @groups = Lazy->_cols2groups(qw/this/);
+	my @groups = Lazy->__grouper->groups_for(Lazy->find_column('this'));
 	ok eq_set([ sort @groups], [qw/things Essential Primary/]), "this (@groups)";
 }
 
 {
-	my @groups = Lazy->_cols2groups(qw/that/);
+	my @groups = Lazy->__grouper->groups_for(Lazy->find_column('that'));
 	ok eq_set(\@groups, [qw/things/]), "that (@groups)";
 }
 
 Lazy->create({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
 
 ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
-ok(exists $obj->{this}, "Gets primary");
-ok(exists $obj->{opop}, "Gets other essential");
-ok(!exists $obj->{that}, "But other things");
-ok(!exists $obj->{eep},  " nor eep");
-ok(!exists $obj->{orp},  " nor orp");
-ok(!exists $obj->{oop},  " nor oop");
+ok($obj->_attribute_exists('this'), "Gets primary");
+ok($obj->_attribute_exists('opop'), "Gets other essential");
+ok(!$obj->_attribute_exists('that'), "But other things");
+ok(!$obj->_attribute_exists('eep'),  " nor eep");
+ok(!$obj->_attribute_exists('orp'),  " nor orp");
+ok(!$obj->_attribute_exists('oop'),  " nor oop");
 
 ok(my $val = $obj->eep, 'Fetch eep');
-ok(exists $obj->{orp}, 'Gets orp too');
-ok(!exists $obj->{oop},  'But still not oop');
-ok(!exists $obj->{that}, 'nor that');
+ok($obj->_attribute_exists('orp'), 'Gets orp too');
+ok(!$obj->_attribute_exists('oop'),  'But still not oop');
+ok(!$obj->_attribute_exists('that'), 'nor that');
 
 {
 	Lazy->columns(All => qw/this that eep orp oop opop/);
 	ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
-	ok !exists $obj->{oop}, " Don't have oop";
+	ok !$obj->_attribute_exists('oop'), " Don't have oop";
 	my $null = $obj->eep;
-	ok !exists $obj->{oop}, " Don't have oop - even after getting eep";
+	ok !$obj->_attribute_exists('oop'), " Don't have oop - even after getting eep";
 }
 
 # Test contructor breaking.

@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 54);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 55);
 }
 
 INIT {
@@ -43,18 +43,25 @@ my $data = {
 };
 
 eval {
-	local $data->{NumExplodingSheep} = 1;
+	my $data = $data;
+	$data->{NumExplodingSheep} = 1;
 	ok my $bt = Film->create($data), "Modified accessor - with column name";
 	isa_ok $bt, "Film";
 };
 is $@, '', "No errors";
 
 eval {
-	local $data->{sheep} = 1;
+	my $data = $data;
+	$data->{sheep} = 1;
 	ok my $bt = Film->create($data), "Modified accessor - with accessor";
 	isa_ok $bt, "Film";
 };
 is $@, '', "No errors";
+
+eval {
+	my @film = Film->search({ sheep => 1 });
+	is @film, 2, "Can search with modified accessor";
+};
 
 {
 
@@ -141,9 +148,12 @@ is $@, '', "No errors";
 	}
 }
 
-{ # was bug with TEMP and no Essential
-	is_deeply(Actor->columns('Essential'), Actor->columns('Primary'), 
-		"Actor has no specific essential columns");
+{    # was bug with TEMP and no Essential
+	is_deeply(
+		Actor->columns('Essential'),
+		Actor->columns('Primary'),
+		"Actor has no specific essential columns"
+	);
 	ok(Actor->find_column('nonpersistent'), "nonpersistent is a column");
 	ok(!Actor->has_real_column('nonpersistent'), " - but it's not real");
 	my $pj = eval { Actor->retrieve("Peter Jackson") };
@@ -151,32 +161,32 @@ is $@, '', "No errors";
 	isa_ok $pj => "Actor";
 }
 
-{ 
+{
 	Film->autoupdate(1);
-	my $naked = Film->create({ title => 'Naked'});
-	my $sandl = Film->create({ title => 'Secrets and Lies'});
+	my $naked = Film->create({ title => 'Naked' });
+	my $sandl = Film->create({ title => 'Secrets and Lies' });
 
 	my $rating = 1;
 	my $update_failure = sub {
 		my $obj = shift;
-		eval { $obj->rating( $rating++ ) };
+		eval { $obj->rating($rating++) };
 		return $@ =~ /read only/;
 	};
 
 	ok !$update_failure->($naked), "Can update Naked";
 	ok $naked->make_read_only, "Make Naked read only";
 	ok $update_failure->($naked), "Can't update Naked any more";
-	ok !$update_failure->($sandl), "But can still update Secrets and Lies"; 
+	ok !$update_failure->($sandl), "But can still update Secrets and Lies";
 	my $july4 = eval { Film->create({ title => "4 Days in July" }) };
 	isa_ok $july4 => "Film", "And can still create new films";
 
-	ok (Film->make_read_only, "Make all Films read only");
+	ok(Film->make_read_only, "Make all Films read only");
 	ok $update_failure->($naked), "Still can't update Naked";
 	ok $update_failure->($sandl), "And can't update S&L any more";
 	eval { $july4->delete };
 	like $@, qr/read only/, "And can't delete 4 Days in July";
 	my $abigail = eval { Film->create({ title => "Abigail's Party" }) };
 	like $@, qr/read only/, "Or create new films";
-	$SIG{__WARN__} = sub {};
+	$SIG{__WARN__} = sub { };
 }
 

@@ -81,10 +81,10 @@ ok(State->can('set_Snowfall'),           'overriden mutator');
 ok(State->can('_set_Snowfall_accessor'), ' with alias');
 
 {
-	eval { my @grps = State->_cols2groups("Huh"); };
-	like $@, qr/not in any groups/, "Huh not in groups";
+	eval { my @grps = State->__grouper->groups_for("Huh"); };
+	ok $@, "Huh not in groups";
 
-	my @grps = sort State->_cols2groups(qw/rain capital/);
+	my @grps = sort State->__grouper->groups_for(State->_find_columns(qw/rain capital/));
 	is @grps, 2, "Rain and Capital = 2 groups";
 	is $grps[0], 'Other',   " - Other";
 	is $grps[1], 'Weather', " - Weather";
