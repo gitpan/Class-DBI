@@ -1,152 +1,159 @@
 NAME
-      Class::DBI - Perl Object-Oriented Persistance Made Stupid
+         Class::DBI - Simple Object Persistance
 
 SYNOPSIS
-      package Film;
-      use base qw(Class::DBI);
+         package Film;
+         use base qw(Class::DBI);
 
-      # Tell Class::DBI a little about yourself.
-      Film->table('Movies');
-      Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
-      Film->columns('Primary', 'Title');
-      Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
+         # Tell Class::DBI a little about yourself.
+         Film->table('Movies');
+         Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+         Film->columns('Primary', 'Title');
+         Film->set_db('Main', 'dbi:mysql', 'me', 'noneofyourgoddamnedbusiness');
 
-      #-- Meanwhile, in a nearby piece of code! --#
-      use Film;
+         #-- Meanwhile, in a nearby piece of code! --#
+         use Film;
 
-      # Create a new film entry for Bad Taste.
-      $btaste = Film->new({ Title       => 'Bad Taste',
-                            Director    => 'Peter Jackson',
-                            Rating      => 'R',
-                            NumExplodingSheep   => 1
-                          });
-  
-      # Retrieve the 'Gone With The Wind' entry from the database.
-      my $gone = Film->retrieve('Gone With The Wind');
-  
-      # Shocking new footage found reveals bizarre Scarlet/sheep scene!
-      $gone->NumExplodingSheep(5);
-      $gone->Rating('NC-17');
-      $gone->commit;
+         # Create a new film entry for Bad Taste.
+         $btaste = Film->new({ Title       => 'Bad Taste',
+                               Director    => 'Peter Jackson',
+                               Rating      => 'R',
+                               NumExplodingSheep   => 1
+                             });
 
-      # Grab the 'Bladerunner' entry.
-      my $blrunner = Film->retrieve('Bladerunner');
+         # Retrieve the 'Gone With The Wind' entry from the database.
+         my $gone = Film->retrieve('Gone With The Wind');
 
-      # Make a copy of 'Bladerunner' and create an entry of the director's
-      # cut from it.
-      my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
+         # Shocking new footage found reveals bizarre Scarlet/sheep scene!
+         $gone->NumExplodingSheep(5);
+         $gone->Rating('NC-17');
+         $gone->commit;
 
-      # Ishtar doesn't deserve an entry anymore.
-      Film->retrieve('Ishtar')->delete;
+         # Grab the 'Bladerunner' entry.
+         my $blrunner = Film->retrieve('Bladerunner');
 
-      # Find all films which have a rating of PG.
-      @films = Film->search('Rating', 'PG');
+         # Make a copy of 'Bladerunner' and create an entry of the director's
+         # cut from it.
+         my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
 
-      # Find all films which were directed by Bob
-      @films = Film->search_like('Director', 'Bob %');
+         # Ishtar doesn't deserve an entry anymore.
+         Film->retrieve('Ishtar')->delete;
+
+         # Find all films which have a rating of PG.
+         @films = Film->search('Rating', 'PG');
+
+         # Find all films which were directed by Bob
+         @films = Film->search_like('Director', 'Bob %');
 
 DESCRIPTION
-    I hate SQL. You hate SQL. We all hate SQL. Alas, we often find the need
-    to make our objects persistant and like it or not an SQL database is
-    usually the most flexible solution.
+       I hate SQL.  You hate SQL.  We all hate SQL.  Alas, we
+       often find the need to make our objects persistant and
+       like it or not an SQL database is usually the most
+       flexible solution.
 
-    This module is for setting up a reasonably efficient, reasonably simple,
-    reasonably extendable persistant object with as little SQL and DBI
-    knowledge as possible.
+       This module is for setting up a reasonably efficient,
+       reasonably simple, reasonably extendable persistant object
+       with as little SQL and DBI knowledge as possible.
 
-    Its uses a scheme to automatically set up accessors for each data field
-    in your class. These accessors control access to the underlying
-    database.
+       Its uses a scheme to automatically set up accessors for
+       each data field in your class.  These accessors control
+       access to the underlying database.
 
-  How to set it up
+       How to set it up
 
-    Here's a fairly quick set of steps on how to make your class persistant.
-    More details about individual methods will follow.
+       Here's a fairly quick set of steps on how to make your
+       class persistant.  More details about individual methods
+       will follow.
 
-    *Set up a database.*
-        You must have an existing database set up, have DBI.pm installed and
-        the necessary DBD:: driver module for that database. See the DBI
-        manpage and the documentation of your particular database for
-        details.
+       Set up a database.
+           You must have an existing database set up, have DBI.pm
+           installed and the necessary DBD:: driver module for
+           that database.  See the DBI manpage and the
+           documentation of your particular database for details.
 
-    *Set up a table for your objects to be stored in.*
-        Class::DBI works on a simple one class/one table model. It is your
-        responsibility to set up that table, automating the process would
-        introduce too many complications (unless somebody wants to convince
-        me otherwise).
+       Set up a table for your objects to be stored in.
+           Class::DBI works on a simple one class/one table
+           model.  It is your responsibility to set up that
+           table, automating the process would introduce too many
+           complications (unless somebody wants to convince me
+           otherwise).
 
-        Using our Film example, you might declare a table something like
-        this:
+           Using our Film example, you might declare a table
+           something like this:
 
-          CREATE TABLE Movies (
-                 Title      VARCHAR(255)    PRIMARY KEY,
-                 Director   VARCHAR(80),
-                 Rating     CHAR(5),    /* to fit at least 'NC-17' */
-                 NumExplodingSheep      INTEGER
-          )
+             CREATE TABLE Movies (
+                    Title      VARCHAR(255)    PRIMARY KEY,
+                    Director   VARCHAR(80),
+                    Rating     CHAR(5),    /* to fit at least 'NC-17' */
+                    NumExplodingSheep      INTEGER
+             )
 
-    *Inherit from Class::DBI.*
-        It is prefered that you use base.pm to do this rather than appending
-        directly to @ISA as your class may have to inherit some protected
-        data fields from Class::DBI and this is important if you're using
-        pseudohashes.
+       Inherit from Class::DBI.
+           It is prefered that you use base.pm to do this rather
+           than appending directly to @ISA as your class may have
+           to inherit some protected data fields from Class::DBI
+           and this is important if you're using pseudohashes.
 
-          package Film;
-          use base qw(Class::DBI);
+             package Film;
+             use base qw(Class::DBI);
 
-    *Declare your columns.*
-        This can be done using columns(). The names of your fields should
-        match the columns in your database, one to one. Class::DBI (via
-        Class::Accessor) will use this information to determine how to
-        create accessors.
+       Declare your columns.
+           This can be done using columns().  The names of your
+           fields should match the columns in your database, one
+           to one.  Class::DBI (via Class::Accessor) will use
+           this information to determine how to create accessors.
 
-          Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
+             Film->columns('All', qw( Title Director Rating NumExplodingSheep ));
 
-    *Declare the name of your table*
-        Inform Class::DBI what table you will be storing your objects in.
-        This is the table you set up eariler.
+           For more information about how you can more
+           efficiently declare your columns, the section on Lazy
+           Population of Columns
 
-          Film->table('Movies');
+       Declare the name of your table
+           Inform Class::DBI what table you will be storing your
+           objects in.  This is the table you set up eariler.
 
-    *Declare which field is your primary key*
-        One of your fields must be a unique identifier for each object. This
-        will be the primary key in your database. Class::DBI needs this
-        piece of information in order to construct the proper SQL statements
-        to access your stored objects.
+             Film->table('Movies');
 
-          Film->columns('Primary', 'Title');
+       Declare which field is your primary key
+           One of your fields must be a unique identifier for
+           each object.  This will be the primary key in your
+           database.  Class::DBI needs this piece of information
+           in order to construct the proper SQL statements to
+           access your stored objects.
 
-    *Declare a database connection*
-        Class::DBI needs to know how to access the database. It does this
-        through a DBI connection which you set up. Set up is by calling the
-        set_db() method and declaring a database connection named 'Main'.
+             Film->columns('Primary', 'Title');
 
-          Film->set_db('Main', 'dbi:mysql', 'user', 'password');
+       Declare a database connection
+           Class::DBI needs to know how to access the database.
+           It does this through a DBI connection which you set
+           up.  Set up is by calling the set_db() method and
+           declaring a database connection named 'Main'.
 
-        set_db() is inherited from Ima::DBI. See that module's man page for
-        details.
+             Film->set_db('Main', 'dbi:mysql', 'user', 'password');
 
-        XXX I should probably make this even simpler. set_db_main() or
-        something.
+           set_db() is inherited from Ima::DBI.  See that
+           module's man page for details.
 
-    *Done.*
-        All set! You can now use the constructors (new(), copy() and
-        retrieve()) destructors (delete()) and all the accessors and other
-        garbage provided by Class::DBI. Make some new objects and muck
-        around a bit. Watch the table in your database as your object does
-        its thing and see things being stored, changed and deleted.
+           XXX I should probably make this even simpler.
+           set_db_main() or something.
 
-    Is it not nifty? Worship the module.
+       Done.
+           All set!  You can now use the constructors (new(),
+           copy() and retrieve()) destructors (delete()) and all
+           the accessors and other garbage provided by
+           Class::DBI.  Make some new objects and muck around a
+           bit.  Watch the table in your database as your object
+           does its thing and see things being stored, changed
+           and deleted.
 
-AUTHOR
-            Michael G Schwern <schwern@pobox.com> with much late-night help
-            from Uri Gutman and Damian Conway.
+       Is it not nifty?  Worship the module.
 
 
 WHAT IS THIS?
 
-This is Class::DBI, a perl module.  Please see the README that comes with
-this distribution.
+This is Class::DBI, a perl module.
+
 
 HOW DO I INSTALL IT?
 
@@ -154,7 +161,6 @@ To install this module, cd to the directory that contains this README
 file and type the following:
 
    perl Makefile.PL
-   make
    make test
    make install
 
@@ -164,3 +170,12 @@ To install this module into a specific directory, do:
 
 Please also read the perlmodinstall man page, if available.
 
+
+WHAT ELSE DO I NEED?
+
+You need these other Perl modules...
+        Carp::Assert                    0.06 or higher
+        Class::Accessor                 0.10 or higher
+        Class::Data::Inheritable        0.02 or higher
+        Ima::DBI                        0.20 or higher
+        Class::Fields                   0.08 or higher

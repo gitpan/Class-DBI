@@ -19,3 +19,12 @@ To install this module into a specific directory, do:
 
 Please also read the perlmodinstall man page, if available.
 
+
+WHAT ELSE DO I NEED?
+
+You need these other Perl modules...
+        Carp::Assert                    0.06 or higher
+        Class::Accessor                 0.10 or higher
+        Class::Data::Inheritable        0.02 or higher
+        Ima::DBI                        0.20 or higher
+        Class::Fields                   0.08 or higher
