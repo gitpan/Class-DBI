@@ -327,6 +327,20 @@ Deletes this object from the database and from memory. If you have set
 up any relationships using hasa_list, delete the foreign elements also.
 $obj is no longer usable after this call.
 
+=head1 HOOKS
+
+  __PACKAGE__->add_hook(create => \&call_after_create);
+  __PACKAGE__->add_hook(delete => \&call_before_delete);
+  __PACKAGE__->add_hook(before_update => \&call_before_update);
+  __PACKAGE__->add_hook(after_update => \&call_after_update);
+
+It is possible to set up hooks that will be called immediately after
+create(), before delete(), or either site of a commit(). You can create
+any number of hooks for each point, but you cannot specify the order in
+which they will be run. Each will be passed a copy of the object being
+dealt with, and return values will be ignored. This is experimental and
+the interface may well change in future versions.
+
 =head1 INSTANCE METHODS
 
 =head2 accessors

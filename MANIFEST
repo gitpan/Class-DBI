@@ -15,6 +15,7 @@ t/07-Move.t
 t/08-inheritcols.t
 t/09-hasa-list.t
 t/10-mysql.t
+t/11-hooks.t
 t/testlib/Actor.pm
 t/testlib/Director.pm
 t/testlib/Film.pm

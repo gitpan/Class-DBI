@@ -1,3 +1,13 @@
+0.35  Sun Oct  7 19:54:11 BST 2001
+    + added hooks for create, update and delete
+    - split commit() for easier subclassing
+
+0.34  Sat Oct  6 12:48:43 BST 2001
+    - Don't die if a value is a reference. (Ima::DBI does this for us,
+       and better in case of overloaded objects)
+    - fix minor problem with mutual hasa / hasa_list referencing
+    - better diagnostics is hasa_list is miscalled
+
 0.33  Sat Sep 15 12:03:17 BST 2001
     + Added create_filter(), and with it retrieve_all()
     + added docs on how to set-up many-to-many relationships

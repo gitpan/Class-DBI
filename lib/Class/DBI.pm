@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.33';
+$VERSION = '0.35';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -94,11 +94,12 @@ sub create {
       $data->{$col} = $obj->id;
     }
   }
-
   $self->_insert_row($data) or return;
 
   # Fetch ourselves back from the database, in case of defaults etc.
-  return $class->retrieve($data->{$self->primary});
+  my $obj = $class->retrieve($data->{$self->primary});
+  $obj->call_hook('create');
+  return $obj;
 }
 
 sub _next_in_sequence {
@@ -281,6 +282,7 @@ WHERE   %s = ?
 sub delete {
   my $self = shift;
 
+  $self->call_hook('delete');
   $self->_cascade_delete;
   eval {
     my $sth = $self->sql_DeleteMe($self->table, $self->columns('Primary'));
@@ -383,14 +385,11 @@ sub commit {
   my $table = $self->table;
   assert( defined $table ) if DEBUG;
 
+  $self->call_hook('before_update');
   if (my @changed_cols = $self->is_changed) {
+    my $sth = $self->sql_commit($table, $self->_commit_line, $self->primary);
     eval {
-      my $sth = $self->sql_commit(
-        $table,
-        join( ', ', map "$_ = " . $self->_column_placeholder($_), @changed_cols),
-        $self->primary
-      );
-      $sth->execute((map $self->{$_}, @changed_cols), $self->id);
+      $sth->execute($self->_commit_vals, $self->id);
     };
     if ($@) {
       $self->DBIwarn( "Cannot commit $table");
@@ -401,7 +400,18 @@ sub commit {
     delete $self->{$_} for @changed_cols;
     $self->_flesh('All');
   }
+  $self->call_hook('after_update');
   return SUCCESS;
+}
+
+sub _commit_line {
+  my $self = shift;
+  join(', ', map "$_ = " . $self->_column_placeholder($_), $self->is_changed)
+}
+
+sub _commit_vals {
+  my $self = shift;
+  map $self->{$_}, $self->is_changed;
 }
 
 sub DESTROY {
@@ -568,22 +578,17 @@ or when commit() is called.
 =cut
 
 sub set {
-    my($self, $key) = splice(@_, 0, 2);
+  my ($self, $key, $value) = @_;
 
-    # Only simple scalar values can be stored.
-    assert( @_ == 1 and !ref $_[0] ) if DEBUG;
+  # Note the change for commit/rollback purposes.
+  # We increment instead of setting to 1 because it might be useful to
+  # someone to know how many times a value has changed between commits.
 
-    my $value = shift;
+  $self->{__Changed}{$key}++ if $self->has_column($key);
+  $self->SUPER::set($key, $value);
+  $self->commit if $self->autocommit;
 
-    # Note the change for commit/rollback purposes.
-    # We increment instead of setting to 1 because it might be useful to
-    # someone to know how many times a value has changed between commits.
-
-    $self->{__Changed}{$key}++ if $self->has_column($key);
-    $self->SUPER::set($key, $value);
-    $self->commit if $self->autocommit;
-
-    return SUCCESS;
+  return SUCCESS;
 }
 
 sub is_changed { keys %{shift->{__Changed}} }
@@ -864,7 +869,7 @@ sub hasa {
     $class->columns($obj_key, @foreign_key_cols);
 
     # Make sure pseudohashes know about the object key field.
-    $class->add_fields(PROTECTED, $obj_key);
+    $class->add_fields(PROTECTED, $obj_key) if !$class->is_field($obj_key);
 
     my $hasa_columns = $class->__hasa_columns || {};
     @{$hasa_columns}{@foreign_key_cols} =
@@ -936,6 +941,8 @@ sub hasa_list {
 
     $class->_load_class($foreign_class);
 
+    croak "$foreign_keys not a listref in $class" 
+      unless ref($foreign_keys) eq "ARRAY";
     croak "Multiple foreign primary keys not yet implemented"
       if @$foreign_keys > 1;
 
@@ -1048,7 +1055,45 @@ sub dbi_rollback {
     $proto->SUPER::rollback(@db_names);
 }
 
+=head2 add_hook
 
+  __PACKAGE__->add_hook(create => \&call_after_create);
+  __PACKAGE__->add_hook(delete => \&call_before_delete);
+  __PACKAGE__->add_hook(before_update => \&call_before_update);
+  __PACKAGE__->add_hook(after_update => \&call_after_update);
+
+This allows you set to set up hooks that get called at the
+relevant points. You can have any number of hooks for each
+point, but you cannot specify the order in which they will
+be run. Each will be passed a copy of the object being dealt
+with, and return values will be ignored.
+
+=cut
+
+__PACKAGE__->mk_classdata('__hooks');
+
+sub add_hook {
+  my $class = shift;
+  $class->_invalid_object_method('add_hook()') if ref $class;
+  my $hooks = $class->__hooks || {};
+  while (@_) {
+    my $when = shift or croak("make_filter() needs hook point");
+    my $ref  = shift or croak("make_filter() needs coderef");
+    ref($ref) eq "CODE" or croak ("make_filter() needs coderef got $ref");
+    push @{$hooks->{$when}}, $ref;
+  }
+  $class->__hooks($hooks);
+}
+
+sub call_hook {
+  my $self = shift;
+  my $class = ref($self);
+  my $type = shift;
+  my $all_hooks = $class->__hooks || {};
+  my $req_hooks = $all_hooks->{$type} || [];
+  $_->($self) foreach @$req_hooks;
+}
+   
 =head2 make_filter
 
   __PACKAGE__->make_filter(method_name => 'SQL_where_clause');
