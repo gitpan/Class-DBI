@@ -6,7 +6,7 @@ BEGIN { $TESTS = 11; }
 use Test::More tests => $TESTS;
 
 SKIP: {
-  my $dbh = DBI->connect('dbi:mysql:test');
+  my $dbh = eval { DBI->connect('dbi:mysql:test') };
   skip "Don't have MySQL test DB", $TESTS unless $dbh;
   eval { require Date::Simple };
   skip "Don't have Date::Simple", $TESTS if $@;

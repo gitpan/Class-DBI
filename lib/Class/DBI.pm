@@ -22,7 +22,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.35';
+$VERSION = '0.36';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI
@@ -132,7 +132,7 @@ sub _insert_row {
     }
   };
   if($@) {
-    $self->DBIwarn('New $class', 'MakeNewObj');
+    $self->DBIwarn("New $class", 'MakeNewObj');
     return;
   }
   return 1;
@@ -1077,9 +1077,9 @@ sub add_hook {
   $class->_invalid_object_method('add_hook()') if ref $class;
   my $hooks = $class->__hooks || {};
   while (@_) {
-    my $when = shift or croak("make_filter() needs hook point");
-    my $ref  = shift or croak("make_filter() needs coderef");
-    ref($ref) eq "CODE" or croak ("make_filter() needs coderef got $ref");
+    my $when = shift or croak("add_hook() needs hook point");
+    my $ref  = shift or croak("add_hook() needs coderef");
+    ref($ref) eq "CODE" or croak ("add_hook() needs coderef got $ref");
     push @{$hooks->{$when}}, $ref;
   }
   $class->__hooks($hooks);
@@ -1165,7 +1165,7 @@ sub _run_query {
     $sth->execute(@$vals);
   };
   if($@) {
-    $class->DBIwarn($type);
+    $class->DBIwarn($class => $type);
     return;
   }
   return $sth;
