@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.20 2000/09/08 19:08:19 schwern Exp $
+# $Id: DBI.pm,v 1.23 2000/09/10 05:36:51 schwern Exp $
 
 package Class::DBI;
 
@@ -7,7 +7,7 @@ require 5.00502;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.19';
+$VERSION = '0.22';
 
 use Carp::Assert;
 use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI 
@@ -301,7 +301,7 @@ sub new {
     if( $self->sequence && !_safe_exists($data, $primary_col) ) {
         my $sth = $self->sql_Nextval($self->sequence);        
         $sth->execute;
-        $data->{$primary_col} = $sth->fetch;
+        $data->{$primary_col} = ($sth->fetchrow_array)[0];
     }
 
     # Look for values which can be objects.
@@ -989,6 +989,15 @@ sub columns {
 
         $class->normalize(\@columns);
 
+        if( $group eq 'Essential' ) {
+            my($prim_col) = $class->columns('Primary');
+            unless( grep /^$prim_col$/, @columns ) {
+                require Carp;
+                Carp::carp('The primary column should be in your essential '.
+                           'group.');
+            }
+        }   
+
         foreach my $col (@columns) {
             $class->add_fields(PROTECTED, $col) unless 
               $class->is_field($col);
@@ -1071,7 +1080,8 @@ sub is_column {
 
     my $col2group = $class->_get_col2group;
 
-    return scalar @{$col2group->{$column}};
+    return exists $col2group->{$column} ? scalar @{$col2group->{$column}}
+                                        : NO;
 }
 
 
@@ -1557,23 +1567,47 @@ If you need this feature let me know and I'll get it working.
 
 =head2 rollback() has concurrency problems
 
+=head2 Working with transactions needs to be made easier.
 
-=head1 BUGS
+$obj->commit should DBI->commit???
 
-=head2 Only tested with DBD::CSV and DBD::mysql.
+Need an easy way to do class-wide commit and rollback.
 
-=head2 sequence() has not been tested.
+
+=head1 BUGS and CAVEATS
+
+=head2 Tested with...
+
+=over 4
+
+=item DBD::mysql - MySQL 3.22 and 3.23
+
+=item DBD::Pg - PostgreSQL 7.0
+
+=item DBD::CSV
+
+=back
+
+=head2 Known not to work with...
+
+=over 4
+
+=item DBD::RAM
+
+=back
+
 
 =head1 AUTHOR
 
 Michael G Schwern <schwern@pobox.com> with much late-night help from
-Uri Gutman and Damian Conway.
+Uri Gutman, Damian Conway, Mike Lambert and the POOP group.
 
 
 =head1 SEE ALSO
 
 L<Ima::DBI>, L<Class::Accessor>, L<base>, L<Class::Data::Inheritable>
 http://www.pobox.com/~schwern/papers/Class-DBI/,
-Perl Object-Oriented Persistence E<lt>poop-group@lists.sourceforge.netE<gt>
+Perl Object-Oriented Persistence E<lt>poop-group@lists.sourceforge.netE<gt>,
+L<Alzabo> and L<Tangram>
 
 =cut

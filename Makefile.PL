@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.8 2000/07/16 19:05:50 schwern Exp $
+# $Id: Makefile.PL,v 1.9 2000/09/10 05:07:25 schwern Exp $
 #
 # A template for Makefile.PL used by Arena Networks.
 # - Set the $PACKAGE variable to the name of your module.
@@ -38,7 +38,7 @@ WriteMakefile(
                             Class::Data::Inheritable => 0.02,
                             Class::Fields       => '0.09',
                             Class::Fields::Fuxor=> '0.06',
-                            Ima::DBI            => '0.23',
+                            Ima::DBI            => '0.24',
                             base                => 1.94,
                             protected           => 0.01,
                            },

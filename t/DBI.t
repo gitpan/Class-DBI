@@ -1,4 +1,4 @@
-# $Id: DBI.t,v 1.12 2000/09/08 18:52:26 schwern Exp $
+# $Id: DBI.t,v 1.15 2000/09/10 05:36:51 schwern Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -45,7 +45,7 @@ sub eqarray  {
 }
 
 # Change this to your # of ok() calls + 1
-BEGIN { $Total_tests = 53 }
+BEGIN { $Total_tests = 55 }
 
 
 package Film;
@@ -63,6 +63,7 @@ sub HasVomit {
                                                 'normalized methods bug'    );
 
 BEGIN {
+    Film->columns('Primary', 'Title');
     Film->columns('Essential', qw( Title ));
     Film->columns('Directors', qw( Director ));
     Film->columns('Other',     qw( Rating NumExplodingSheep HasVomit ));
@@ -72,7 +73,6 @@ BEGIN {
 Film->table('Movies');
 ::ok( Film->table eq 'Movies',                                  'table()'   );
 
-Film->columns('Primary', 'Title');
 ::ok( ::eqarray([Film->columns('Primary')], ['title']),         'columns()' );
 
 # Find a test database to use.
@@ -80,9 +80,11 @@ my %dbi;
 my @dbi_drivers = DBI->available_drivers;
 my @drivers_we_like = grep /^CSV|RAM$/, @dbi_drivers;
 if ( grep /^CSV$/, @drivers_we_like ) {      # We like DBD::CSV
-     $dbi{'data src'}    = 'DBI:CSV:f_dir=testdb';
-     $dbi{user}          = '';
-     $dbi{password}      = '';
+    print STDERR "\t\tTesting with DBD::CSV.\n";
+
+    $dbi{'data src'}    = 'DBI:CSV:f_dir=testdb';
+    $dbi{user}          = '';
+    $dbi{password}      = '';
 }
 # DBD::RAM doesn't seem quite ready for this.
 # elsif ( grep /^RAM$/, @drivers_we_like ) {      # We like DBD::RAM, too.
@@ -141,6 +143,9 @@ END {
 
 
 package main;
+
+::ok( Film->is_column('Title'),         'is_column(), true' );
+::ok( !Film->is_column('HGLAGAGlAG'),   'is_column(), false');
 
 # Create a new film entry for Bad Taste.
 my $btaste = Film->new({ Title       => 'Bad Taste',
