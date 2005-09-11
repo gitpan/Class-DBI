@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 40);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 41);
 }
 
 use lib 't/testlib';
@@ -19,7 +19,8 @@ ok !ref($pj), ' ... which is not an object';
 
 ok(Film->has_a('director' => 'Director'), "Link Director table");
 ok(
-	Director->create({
+	Director->create(
+		{
 			Name     => 'Peter Jackson',
 			Birthday => -300000000,
 			IsInsane => 1
@@ -42,11 +43,13 @@ ok(
 }
 
 # Oh no!  Its Peter Jacksons even twin, Skippy!  Born one minute after him.
-my $sj = Director->create({
+my $sj = Director->create(
+	{
 		Name     => 'Skippy Jackson',
 		Birthday => (-300000000 + 60),
 		IsInsane => 1,
-	});
+	}
+);
 
 {
 	eval { $btaste->Director($btaste) };
@@ -101,24 +104,28 @@ is(
 
 	my $fail;
 	eval {
-		$fail = YA::Film->create({
+		$fail = YA::Film->create(
+			{
 				Title             => 'Tastes Bad',
 				Director          => $sj,
 				codirector        => $btaste,
 				Rating            => 'R',
 				NumExplodingSheep => 23
-			});
+			}
+		);
 	};
 	ok $@,    "Can't have film as codirector: $@";
 	is $fail, undef, "We didn't get anything";
 
-	my $tastes_bad = YA::Film->create({
+	my $tastes_bad = YA::Film->create(
+		{
 			Title             => 'Tastes Bad',
 			Director          => $sj,
 			codirector        => $pj,
 			Rating            => 'R',
 			NumExplodingSheep => 23
-		});
+		}
+	);
 	is($tastes_bad->Director->Name, 'Skippy Jackson', 'Director');
 	is(
 		$tastes_bad->_director_accessor->Name,
@@ -197,7 +204,8 @@ is(
 		},
 		deflate => sub {
 			shift->mpaa;
-		});
+		}
+	);
 
 	my $tbad = YA::Film->retrieve('Tastes Bad');
 
@@ -226,4 +234,10 @@ is(
 	$tbad = Film->retrieve('Tastes Bad');
 	ok !ref($tbad->Rating), 'Unmagical rating';
 	is $tbad->Rating, 'NS17', 'but prior change stuck';
+}
+
+{                 # Broken has_a declaration
+	eval { Film->has_a(driector => "Director") };
+	like $@, qr/driector/,
+		"Sensible error from has_a with incorrect column: $@";
 }

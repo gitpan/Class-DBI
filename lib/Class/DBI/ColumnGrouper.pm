@@ -186,7 +186,7 @@ sub primary {
 
 sub essential {
 	my $self = shift;
-	my @cols = $self->group_cols('Essential');
+	my @cols = $self->columns_in('Essential');
 	@cols = $self->primary unless @cols;
 	return @cols;
 }

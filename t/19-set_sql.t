@@ -3,12 +3,19 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 15);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 17);
 }
 
 use lib 't/testlib';
 use Film;
 use Actor;
+
+{    # Check __ESSENTIAL__ expansion (RT#13038)
+	my @cols = Film->columns('Essential');
+	is_deeply \@cols, ['title'], "1 Column in essential";
+	is +Film->transform_sql('__ESSENTIAL__'), 'title',
+		'__ESSENTIAL__ expansion';
+}
 
 my $f1 = Film->create({ title => 'A', director => 'AA', rating => 'PG' });
 my $f2 = Film->create({ title => 'B', director => 'BA', rating => 'PG' });

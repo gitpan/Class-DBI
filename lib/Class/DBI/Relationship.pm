@@ -20,13 +20,16 @@ sub _init {
 	my $proto = shift;
 	my $name  = shift;
 	my ($class, $accessor, $foreign_class, $args) = $proto->remap_arguments(@_);
-	return $proto->new({
+	$class->clear_object_index;
+	return $proto->new(
+		{
 			name          => $name,
 			class         => $class,
 			foreign_class => $foreign_class,
 			accessor      => $accessor,
 			args          => $args,
-		});
+		}
+	);
 }
 
 sub remap_arguments {

@@ -9,9 +9,10 @@ use base 'Class::DBI::Test::SQLite';
 
 __PACKAGE__->set_table('Actor');
 
-__PACKAGE__->columns(Primary => 'id');
-__PACKAGE__->columns(All     => qw/ Name Film Salary /);
-__PACKAGE__->columns(TEMP    => qw/ nonpersistent /);
+__PACKAGE__->columns(Primary   => 'id');
+__PACKAGE__->columns(All       => qw/ Name Film Salary /);
+__PACKAGE__->columns(TEMP      => qw/ nonpersistent /);
+__PACKAGE__->columns(Stringify => 'Name');
 __PACKAGE__->add_constructor(salary_between => 'salary >= ? AND salary <= ?');
 
 sub mutator_name { "set_$_[1]" }

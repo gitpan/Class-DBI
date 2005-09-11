@@ -804,9 +804,7 @@ Changing Your Column Accessor Method Names
 
     If any columns have been updated then the "after_update" trigger is
     invoked after the database update has executed and is passed: ($self,
-    discard_columns => \@discard_columns, rows => $rows)
-
-    (where rows is the return value from the DBI execute() method).
+    discard_columns => \@discard_columns)
 
     The trigger code can modify the discard_columns array to affect which
     columns are discarded.
@@ -825,11 +823,13 @@ Changing Your Column Accessor Method Names
     Take care to not delete a primary key column unless you know what you're
     doing.
 
-    If the object had not changed and thus did not need to issue an UPDATE
-    statement, the update() call will have a return value of -1.
+    The update() method returns the number of rows updated. If the object
+    had not changed and thus did not need to issue an UPDATE statement, the
+    update() call will have a return value of -1.
 
-    If the record in the database has been deleted, or for some other reason
-    the update does not change exactly one database row, the call will die.
+    If the record in the database has been deleted, or its primary key value
+    changed, then the update will not affect any records and so the update()
+    method will return 0.
 
   discard_changes
       $obj->discard_changes;
@@ -852,10 +852,12 @@ Changing Your Column Accessor Method Names
       $id = $obj->id;
       @id = $obj->id;
 
-    Returns a unique identifier for this object. It's the equivalent of
-    $obj->get($self->columns('Primary')); A warning will be generated if
-    this method is used in scalar context on a table with a multi-column
-    primary key.
+    Returns a unique identifier for this object based on the values in the
+    database. It's the equivalent of $obj->get($self->columns('Primary')),
+    with inflated values reduced to their ids.
+
+    A warning will be generated if this method is used in scalar context on
+    a table with a multi-column primary key.
 
   LOW-LEVEL DATA ACCESS
     On some occasions, such as when you're writing triggers or constraint
@@ -1643,7 +1645,7 @@ THANKS TO
 
 RELEASE PHILOSOPHY
     Class::DBI now uses a three-level versioning system. This release, for
-    example, is version 3.0.2
+    example, is version 3.0.3
 
     The general approach to releases will be that users who like a degree of
     stability can hold off on upgrades until the major sub-version increases

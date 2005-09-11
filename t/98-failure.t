@@ -22,7 +22,7 @@ Film->create_test_film;
 		no warnings 'redefine';
 		local *DBIx::ContextualFetch::st::execute = sub { die "Database died" };
 		eval { $btaste->delete };
-		::like $@, qr/delete.*Database died/s, "We failed";
+		::like $@, qr/Database died/s, "We failed";
 	}
 	my $still = Film->retrieve('Bad Taste');
 	isa_ok $btaste, 'Film', "We still have Bad Taste";

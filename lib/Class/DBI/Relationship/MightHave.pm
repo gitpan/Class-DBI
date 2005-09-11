@@ -32,15 +32,16 @@ sub methods {
 	my ($class, $method) = ($self->class, $self->accessor);
 	return (
 		$method => $self->_object_accessor,
-		map { $_ => $self->_imported_accessor($_) } @{ $self->args->{import} });
+		map { $_ => $self->_imported_accessor($_) } @{ $self->args->{import} }
+	);
 }
 
 sub _object_accessor {
-	my $self = shift;
-	my ($class, $method) = ($self->class, $self->accessor);
+	my $rel = shift;
+	my ($class, $method) = ($rel->class, $rel->accessor);
 	return sub {
 		my $self = shift;
-		my $meta = $class->meta_info(might_have => $method);
+		my $meta = $class->meta_info($rel->name => $method);
 		my ($f_class, @extra) =
 			($meta->foreign_class, @{ $meta->args->{import} });
 		$self->{"_${method}_object"} ||= $f_class->retrieve($self->id);
@@ -48,16 +49,17 @@ sub _object_accessor {
 }
 
 sub _imported_accessor {
-	my ($self, $name) = @_;
-	my ($class, $method) = ($self->class, $self->accessor);
+	my ($rel, $name) = @_;
+	my ($class, $method) = ($rel->class, $rel->accessor);
 	return sub {
 		my $self = shift;
-		my $meta = $class->meta_info(might_have => $method);
+		my $meta = $class->meta_info($rel->name => $method);
 		my ($f_class, @extra) =
 			($meta->foreign_class, @{ $meta->args->{import} });
 		my $for_obj = $self->$method() || do {
 			my $val = shift or return;    # just fetching
-			$f_class->create({ $f_class->primary_column => $self->id, $name => $val });
+			$f_class->create(
+				{ $f_class->primary_column => $self->id, $name => $val });
 			$self->$method();
 		};
 		$for_obj->$name(@_);

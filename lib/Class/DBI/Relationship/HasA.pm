@@ -6,14 +6,11 @@ use warnings;
 use base 'Class::DBI::Relationship';
 
 sub remap_arguments {
-	my $proto = shift;
-	my $class = shift;
-	$class->_invalid_object_method('has_a()') if ref $class;
-	my $column = $class->find_column(+shift)
-		or return $class->_croak("has_a needs a valid column");
-	my $a_class = shift
-		or $class->_croak("$class $column needs an associated class");
-	my %meths = @_;
+	my ($proto, $class, $want_col, $a_class, %meths) = @_;
+	$class->_invalid_object_method("has_a") if ref $class;
+	my $column = $class->find_column($want_col)
+		or return $class->_croak("Column $want_col does not exist");
+	$class->_croak("$class $column needs an associated class") unless $a_class;
 	return ($class, $column, $a_class, \%meths);
 }
 
@@ -30,12 +27,12 @@ sub triggers {
 }
 
 sub _inflator {
-	my $self = shift;
-	my $col  = $self->accessor;
+	my $rel = shift;
+	my $col = $rel->accessor;
 	return sub {
 		my $self = shift;
 		defined(my $value = $self->_attrs($col)) or return;
-		my $meta = $self->meta_info(has_a => $col);
+		my $meta = $self->meta_info($rel->name => $col);
 		my ($a_class, %meths) = ($meta->foreign_class, %{ $meta->args });
 
 		return if ref $value and $value->isa($a_class);

@@ -120,7 +120,7 @@ like $@, qr/a hashref/, "Can't create without hashref";
 	my $foo = bless {}, 'Holiday';
 	local $SIG{__WARN__} = sub { die $_[0] };
 	eval { $foo->has_a(date => 'Date::Simple') };
-	like $@, qr/object method/, "has_a is class-level";
+	like $@, qr/object method/, "has_a is class-level: $@";
 }
 
 eval { Holiday->update; };

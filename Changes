@@ -1,3 +1,29 @@
+3.0.3 Sep 11 2005
+
+  Bug Fixes
+    - Ensure object is removed from index when delete()d (Tim Bunce)
+    - clear_object_index when new relationship set up (Tim Bunce)
+    - Fixed bug where PK values got auto-vivified 
+       (Tatsuhiko Miyagawa, Christopher L. Everett, Tim Bunce)
+    - Removed 'AS' when aliasing tables; some databases don't like that
+    - Properly return -1 from unchanged object updates (Kingsley Kerce)
+    - Fixed problems with overloaded stringification of related classes
+       (Tim Bunce)
+    - Fixed bug where Essential might contain the PK twice 
+
+  Refactorings
+    - Split live_object_key for easy subclassing (Tim Bunce)
+    - Split out _as_hash() to return underlying data hash
+    - Optimised _mk_column_accessors (Maurice Aubrey)
+    - Don't hard-code relationship names (Peter Speltz)
+
+  Internals
+    - Changed error message when setting up has_a with incorrect column
+       (Drew Taylor)
+
+  Documentation
+    - Fixed docs for after_update trigger and update (Kingsley Kerce)
+
 3.0.2 Sep 11 2005
 
   Code

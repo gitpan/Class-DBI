@@ -4,7 +4,7 @@ $| = 1;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 90);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 91);
 }
 
 INIT {
@@ -230,6 +230,12 @@ is($btaste->Director, $orig_director, 'discard_changes()');
 	}
 	is @warnings, 1, "DESTROY without update warns";
 	Film->autoupdate(0);
+}
+
+{ # update unchanged object
+	my $film = Film->retrieve($btaste->id);
+	my $retval = $film->update;
+	is $retval, -1, "Unchanged object";
 }
 
 {

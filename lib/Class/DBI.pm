@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.2');
+use version; $VERSION = qv('3.0.3');
 
 use strict;
 
@@ -172,7 +172,7 @@ sub transform_sql {
 		my ($class, $alias) = split /=/, shift, 2;
 		my $table = $class ? $class->table : $self->table;
 		$cmap{ $alias || $table } = $class || ref $self || $self;
-		($alias ||= "") &&= " AS $alias";
+		($alias ||= "") &&= " $alias";
 		return $table . $alias;
 	};
 
@@ -315,6 +315,7 @@ sub id {
 	# we don't use get() here because all objects should have
 	# exisitng values for PK columns, or else loop endlessly
 	my @pk_values = $self->_attrs($self->primary_columns);
+	UNIVERSAL::can($_ => 'id') and $_ = $_->id for @pk_values;
 	return @pk_values if wantarray;
 	$self->_croak(
 		"id called in scalar context for class with multiple primary key columns")
@@ -382,13 +383,13 @@ sub _mk_column_accessors {
 	my $class = shift;
 	foreach my $obj ($class->_find_columns(@_)) {
 		my %method = (
-			ro => $obj->accessor($class->accessor_name($obj->name)),
-			wo => $obj->mutator($class->mutator_name($obj->name)),
+			_ro_ => $obj->accessor($class->accessor_name($obj->name)) || "",
+			_wo_ => $obj->mutator($class->mutator_name($obj->name))   || "",
 		);
-		my $both = ($method{ro} eq $method{wo});
+		%method = ('_' => $method{_ro_}) if $method{_ro_} eq $method{_wo_};
 		foreach my $type (keys %method) {
 			my $name     = $method{$type};
-			my $acc_type = $both ? "make_accessor" : "make_${type}_accessor";
+			my $acc_type = "make${type}accessor";
 			my $accessor = $class->$acc_type($obj->name_lc);
 			$class->_make_method($_, $accessor) for ($name, "_${name}_accessor");
 		}
@@ -469,6 +470,10 @@ sub create {
 	return $class->_create($data);
 }
 
+#----------------------------------------------------------------------
+# Low Level Data Access
+#----------------------------------------------------------------------
+
 sub _attrs {
 	my ($self, @atts) = @_;
 	return @{$self}{@atts};
@@ -504,41 +509,46 @@ sub _attribute_exists {
 	exists $self->{$attribute};
 }
 
-# keep an index of live objects using weak refs
+#----------------------------------------------------------------------
+# Live Object Index (using weak refs if available)
+#----------------------------------------------------------------------
+
 my %Live_Objects;
 my $Init_Count = 0;
 
 sub _init {
 	my $class = shift;
-	my $data = shift || {};
-	my $obj;
-	my $obj_key = "";
+	my $data  = shift || {};
+	my $key   = $class->_live_object_key($data);
+	return $Live_Objects{$key} || $class->_fresh_init($key => $data);
+}
 
-	my @primary_columns = $class->primary_columns;
-	if (@primary_columns == grep defined, @{$data}{@primary_columns}) {
+sub _fresh_init {
+	my ($class, $key, $data) = @_;
+	my $obj = bless {}, $class;
+	$obj->_attribute_store(%$data);
 
-		# create single unique key for this object
-		$obj_key = join "|", $class, map { $_ . '=' . $data->{$_} }
-			sort @primary_columns;
+	# don't store it unless all keys are present
+	if ($key && $Weaken_Is_Available) {
+		weaken($Live_Objects{$key} = $obj);
+
+		# time to clean up your room?
+		$class->purge_dead_from_object_index
+			if ++$Init_Count % $class->purge_object_index_every == 0;
 	}
-
-	unless (defined($obj = $Live_Objects{$obj_key})) {
-
-		# not in the object_index, or we don't have all keys yet
-		$obj = bless {}, $class;
-		$obj->_attribute_store(%$data);
-
-		# don't store it unless all keys are present
-		if ($obj_key && $Weaken_Is_Available) {
-			weaken($Live_Objects{$obj_key} = $obj);
-
-			# time to clean up your room?
-			$class->purge_dead_from_object_index
-				if ++$Init_Count % $class->purge_object_index_every == 0;
-		}
-	}
-
 	return $obj;
+}
+
+sub _live_object_key {
+	my ($me, $data) = @_;
+	my $class   = ref($me) || $me;
+	my @primary = $class->primary_columns;
+
+	# no key unless all PK columns are defined
+	return "" unless @primary == grep defined $data->{$_}, @primary;
+
+	# create single unique key for this object
+	return join "\030", $class, map $_ . "\032" . $data->{$_}, sort @primary;
 }
 
 sub purge_dead_from_object_index {
@@ -546,18 +556,16 @@ sub purge_dead_from_object_index {
 }
 
 sub remove_from_object_index {
-	my $self            = shift;
-	my @primary_columns = $self->primary_columns;
-	my %data;
-	@data{@primary_columns} = $self->get(@primary_columns);
-	my $obj_key = join "|", ref $self, map $_ . '=' . $data{$_},
-		sort @primary_columns;
+	my $self    = shift;
+	my $obj_key = $self->_live_object_key({ $self->_as_hash });
 	delete $Live_Objects{$obj_key};
 }
 
 sub clear_object_index {
 	%Live_Objects = ();
 }
+
+#----------------------------------------------------------------------
 
 sub _prepopulate_id {
 	my $self            = shift;
@@ -688,10 +696,8 @@ sub retrieve {
 # This can take either a primary key, or a hashref of all the columns
 # to change.
 sub _data_hash {
-	my $self    = shift;
-	my @columns = $self->all_columns;
-	my %data;
-	@data{@columns} = $self->get(@columns);
+	my $self            = shift;
+	my %data            = $self->_as_hash;
 	my @primary_columns = $self->primary_columns;
 	delete @data{@primary_columns};
 	if (@_) {
@@ -704,6 +710,14 @@ sub _data_hash {
 		@data{ keys %$arg } = values %$arg;
 	}
 	return \%data;
+}
+
+sub _as_hash {
+	my $self    = shift;
+	my @columns = $self->all_columns;
+	my %data;
+	@data{@columns} = $self->get(@columns);
+	return %data;
 }
 
 sub copy {
@@ -736,6 +750,7 @@ sub move {
 sub delete {
 	my $self = shift;
 	return $self->_search_delete(@_) if not ref $self;
+	$self->remove_from_object_index;
 	$self->call_trigger('before_delete');
 
 	eval { $self->sql_DeleteMe->execute($self->id) };
@@ -773,7 +788,7 @@ sub update {
 		or return $self->_croak("Can't call update as a class method");
 
 	$self->call_trigger('before_update');
-	return 1 unless my @changed_cols = $self->is_changed;
+	return -1 unless my @changed_cols = $self->is_changed;
 	$self->call_trigger('deflate_for_update');
 	my @primary_columns = $self->primary_columns;
 	my $sth             = $self->sql_update($self->_update_line);
@@ -2111,9 +2126,7 @@ always invoked immediately.
 
 If any columns have been updated then the C<after_update> trigger
 is invoked after the database update has executed and is passed:
-  ($self, discard_columns => \@discard_columns, rows => $rows)
-
-(where rows is the return value from the DBI execute() method).
+  ($self, discard_columns => \@discard_columns)
 
 The trigger code can modify the discard_columns array to affect
 which columns are discarded.
@@ -2132,11 +2145,13 @@ For example:
 Take care to not delete a primary key column unless you know what
 you're doing.
 
-If the object had not changed and thus did not need to issue an UPDATE
-statement, the update() call will have a return value of -1.
+The update() method returns the number of rows updated.  If the object
+had not changed and thus did not need to issue an UPDATE statement,
+the update() call will have a return value of -1.
 
-If the record in the database has been deleted, or for some other reason
-the update does not change exactly one database row, the call will die.
+If the record in the database has been deleted, or its primary key value
+changed, then the update will not affect any records and so the update()
+method will return 0.
 
 =head2 discard_changes
 
@@ -2162,10 +2177,12 @@ after_set_$column trigger)
   $id = $obj->id;
   @id = $obj->id;
 
-Returns a unique identifier for this object. It's the equivalent of
-$obj->get($self->columns('Primary'));  A warning will be generated
-if this method is used in scalar context on a table with a multi-column
-primary key.
+Returns a unique identifier for this object based on the values in the
+database. It's the equivalent of $obj->get($self->columns('Primary')),
+with inflated values reduced to their ids.
+
+A warning will be generated if this method is used in scalar context on
+a table with a multi-column primary key.
 
 =head2 LOW-LEVEL DATA ACCESS
 
@@ -3002,7 +3019,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.2
+example, is version 3.0.3
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

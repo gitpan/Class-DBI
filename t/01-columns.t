@@ -10,10 +10,10 @@ use base 'Class::DBI';
 use Class::DBI::Column;
 
 State->table('State');
-State->columns('Primary',   'Name');
-State->columns('Essential', qw/Abbreviation/);
-State->columns('Weather',   qw/Rain Snowfall/);
-State->columns('Other',     qw/Capital Population/);
+State->columns(Essential => qw/Abbreviation Name/);
+State->columns(Primary =>   'Name');
+State->columns(Weather =>   qw/Rain Snowfall/);
+State->columns(Other =>     qw/Capital Population/);
 State->has_many(cities => "City");
 
 sub accessor_name {

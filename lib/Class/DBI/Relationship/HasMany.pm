@@ -8,8 +8,10 @@ use base 'Class::DBI::Relationship';
 sub remap_arguments {
 	my ($proto, $class, $accessor, $f_class, $f_key, $args) = @_;
 
-	return $class->_croak("has_many needs an accessor name") unless $accessor;
-	return $class->_croak("has_many needs a foreign class")  unless $f_class;
+	return $class->_croak($class->name . " needs an accessor name")
+		unless $accessor;
+	return $class->_croak($class->name . " needs a foreign class")
+		unless $f_class;
 	$class->can($accessor)
 		and return $class->_carp("$accessor method already exists in $class\n");
 
@@ -60,7 +62,8 @@ sub triggers {
 		before_delete => sub {
 			$self->foreign_class->search($self->args->{foreign_key} => shift->id)
 				->delete_all;
-		});
+		}
+	);
 }
 
 sub methods {
@@ -73,8 +76,8 @@ sub methods {
 }
 
 sub _method_add_to {
-	my $self     = shift;
-	my $accessor = $self->accessor;
+	my $rel      = shift;
+	my $accessor = $rel->accessor;
 	return sub {
 		my ($self, $data) = @_;
 		my $class = ref $self
@@ -82,7 +85,7 @@ sub _method_add_to {
 		return $self->_croak("add_to_$accessor needs data")
 			unless ref $data eq "HASH";
 
-		my $meta = $class->meta_info(has_many => $accessor);
+		my $meta = $class->meta_info($rel->name => $accessor);
 		my ($f_class, $f_key, $args) =
 			($meta->foreign_class, $meta->args->{foreign_key}, $meta->args);
 		$data->{$f_key} = $self->id;
@@ -104,11 +107,11 @@ sub _has_many_method {
 }
 
 sub _hm_run_search {
-	my $self = shift;
-	my ($class, $accessor) = ($self->class, $self->accessor);
+	my $rel = shift;
+	my ($class, $accessor) = ($rel->class, $rel->accessor);
 	return sub {
 		my ($self, @search_args) = @_;
-		my $meta = $class->meta_info(has_many => $accessor);
+		my $meta = $class->meta_info($rel->name => $accessor);
 		my ($f_class, $f_key, $args) =
 			($meta->foreign_class, $meta->args->{foreign_key}, $meta->args);
 		if (ref $self) {    # For $artist->cds
