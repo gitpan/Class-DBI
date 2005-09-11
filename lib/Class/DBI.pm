@@ -12,7 +12,7 @@ use strict;
 use base "Class::DBI::__::Base";
 
 use vars qw($VERSION);
-$VERSION = '0.96';
+$VERSION = '3.0.1';
 
 use Class::DBI::ColumnGrouper;
 use Class::DBI::Query;
@@ -2951,11 +2951,11 @@ placeholders.
 
 =head1 CURRENT AUTHOR
 
-Tony Bowden <classdbi@tmtm.com>
+Tony Bowden 
 
 =head1 AUTHOR EMERITUS
 
-Michael G Schwern <schwern@pobox.com>
+Michael G Schwern 
 
 =head1 THANKS TO
 
@@ -2969,28 +2969,131 @@ Piacentini, Simon Cozens, Simon Wilcox, Thomas Klausner, Tom Renfro,
 Uri Gutman, William McKee, the Class::DBI mailing list, the POOP group,
 and all the others who've helped, but that I've forgetten to mention.
 
+=head1 RELEASE PHILOSOPHY
+
+Class::DBI now uses a three-level versioning system. This release, for
+example, is version 3.0.1
+
+The general approach to releases will be that users who like a degree of
+stability can hold off on upgrades until the major sub-version increases
+(e.g. 3.1.0). Those who like living more on the cutting edge can keep up
+to date with minor sub-version releases. 
+
+In general the minor-version releases will be for bug fixes and
+refactorings, whereas new functionality will be held-off until major
+sub-version releases.
+
+Of course, these aren't hard and fast rules, and we'll need to see how
+this all goes.
+
+=head2 Getting changes accepted
+
+There is an active Class::DBI community, however I am not part of it.
+I am not on the mailing list, and I don't follow the wiki. I also do
+not follow Perl Monks or CPAN reviews or annoCPAN or whatever the tool
+du jour happens to be. 
+
+If you find a problem with Class::DBI, by all means discuss it in any of
+these places, but don't expect anything to happen unless you actually
+tell me about it.
+
+The preferred method for doing this is via the CPAN RT interface, which
+you can access at http://rt.cpan.org/ or by emailing
+  bugs-Class-DBI@rt.cpan.org
+
+If you email me personally about Class::DBI issues, then I will
+probably bounce them on to there, unless you specifically ask me not to.
+Otherwise I can't keep track of what all needs fixed. (This of course
+means that if you ask me not to send your mail to RT, there's a much
+higher chance that nothing will every happen about your problem).
+
+=head2 Bug Reports
+
+If you're reporting a bug then it has a much higher chance of getting
+fixed quicker if you can include a failing test case. This should be
+a completely stand-alone test that could be added to the Class::DBI
+distribution. That is, it should use Test::Simple or Test::More, fail
+with the current code, but pass when I fix the problem. If it needs to
+have a working database to show the problem, then this should preferably
+use SQLite, and come with all the code to set this up. The nice people
+on the mailing list will probably help you out if you need assistance
+putting this together.
+
+You don't need to include code for actually fixing the problem, but of
+course it's often nice if you can. I may choose to fix it in a different
+way, however, so it's often better to ask first whether I'd like a
+patch, particularly before spending a lot of time hacking.
+
+=head2 Patches
+
+If you are sending patches, then please send either the entire code
+that is being changed or the output of 'diff -Bub'.  Please also note
+what version the patch is against. I tend to apply all patches manually,
+so I'm more interested in being able to see what you're doing than in
+being able to apply the patch cleanly. Code formatting isn't an issue,
+as I automagically run perltidy against the source after any changes,
+so please format for clarity.
+
+Patches have a much better chance of being applied if they are small.
+People often think that it's better for me to get one patch with a bunch
+of fixes. It's not. I'd much rather get 100 small patches that can be
+applied one by one. A change that I can make and release in five minutes
+is always better than one that needs a couple of hours to ponder and work
+through. 
+
+I often reject patches that I don't like. Please don't take it personally.
+I also like time to think about the wider implications of changes. Often
+a I<lot> of time. Feel free to remind me about things that I may have
+forgotten about, but as long as they're on rt.cpan.org I will get around
+to them eventually.
+
+=head2 Feature Requests
+
+Wish-list requests are fine, although you should probably discuss them
+on the mailing list (or equivalent) with others first. There's quite
+often a plugin somewhere that already does what you want.
+
+In general I am much more open to discussion on how best to provide the
+flexibility for you to make your Cool New Feature(tm) a plugin rather
+than adding it to Class::DBI itself.
+
+For the most part the core of Class::DBI already has most of the
+functionality that I believe it will ever need (and some more besides,
+that will probably be split off at some point). Most other things are much
+better off as plugins, with a separate life on CPAN or elsewhere (and with
+me nowhere near the critical path). Most of the ongoing work on Class::DBI
+is about making life easier for people to write extensions - whether
+they're local to your own codebase or released for wider consumption.
+
 =head1 SUPPORT
 
-Support for Class::DBI is via the mailing list. The list is used for
-general queries on the use of Class::DBI, bug reports, patches, and
-suggestions for improvements or new features.
+Support for Class::DBI is mostly via the mailing list.
 
-To join the list visit http://groups.kasei.com/mail/info/cdbi-talk
+To join the list, or read the archives, visit
+  http://lists.digitalcraftsmen.net/mailman/listinfo/classdbi
 
-You can also report bugs through the CPAN RT interface, but I'll
-proabably also forward those to the mailing list for discussion (and
-often bounce mailing list bug reports to the RT interface so I don't
-forget about them!)
+There is also a Class::DBI wiki at 
+  http://www.class-dbi.com/
 
-When submitting patches I quite like the 'diff -Bub' format. Bug fixes
-also get applied much quicker if you supply a failing test case (even
-in preference to a fix!)
+The wiki contains much information that should probably be in these docs
+but isn't yet. (See above if you want to help to rectify this.)
 
-The interface to Class::DBI is fairly stable, but there are still
-occasions when we need to break backwards compatability. Such issues
-will be raised on the list before release, so if you use Class::DBI in
-a production environment, it's probably a good idea to keep a watch on
-the list (and definitely on the CHANGES file of a new release).
+As mentioned above, I don't follow the list or the wiki, so if you want
+to contact me individually, then you'll have to track me down personally.
+
+There are lots of 3rd party subclasses and plugins available.
+For a list of the ones on CPAN see:
+  http://search.cpan.org/search?query=Class%3A%3ADBI&mode=module
+
+An article on Class::DBI was published on Perl.com a while ago. It's
+slightly out of date , but it's a good introduction:
+  http://www.perl.com/pub/a/2002/11/27/classdbi.html
+
+The wiki has numerous references to other articles, presentations etc.
+
+http://poop.sourceforge.net/ provides a document comparing a variety
+of different approaches to database persistence, such as Class::DBI,
+Alazabo, Tangram, SPOPS etc.
 
 =head1 LICENSE
 
@@ -2999,26 +3102,10 @@ it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-There is a Class::DBI wiki at:
-	http://www.class-dbi.com/cgi-bin/wiki/index.cgi?HomePage
-
-Amongst other things it provides the beginnings of a Cookbook of typical
-tricks and tips. Please contribute!
-
-There are lots of 3rd party subclasses and plugins available.
-For a full list see:
-	http://search.cpan.org/search?query=Class%3A%3ADBI&mode=module
-
-An article on Class::DBI was published on Perl.com a while ago. It's
-slightly out of date already, but it's a good introduction:
-	http://www.perl.com/pub/a/2002/11/27/classdbi.html
-
-http://poop.sourceforge.net/ provides a document comparing a variety
-of different approaches to database persistence, such as Class::DBI,
-Alazabo, Tangram, SPOPS etc.
-
-Class::DBI is built on top of L<Ima::DBI>, L<Class::Accessor> and
-L<Class::Data::Inheritable>.
+Class::DBI is built on top of L<Ima::DBI>, L<DBIx::ContextualFetch>,
+L<Class::Accessor> and L<Class::Data::Inheritable>. The innards and
+much of the interface are easier to understand if you have an idea of
+how they all work as well.
 
 =cut
 

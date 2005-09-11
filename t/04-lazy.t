@@ -16,23 +16,24 @@ INIT {
 	Lazy->CONSTRUCT;
 }
 
-ok(eq_set([ Lazy->columns('Primary') ],        [qw/this/]),      "Pri");
-ok(eq_set([ sort Lazy->columns('Essential') ], [qw/opop this/]), "Essential");
-ok(eq_set([ sort Lazy->columns('things') ],    [qw/that this/]), "things");
-ok(eq_set([ sort Lazy->columns('horizon') ],   [qw/eep orp/]),   "horizon");
-ok(eq_set([ sort Lazy->columns('vertical') ],  [qw/oop opop/]),  "vertical");
-ok(eq_set([ sort Lazy->columns('All') ], [qw/eep oop opop orp this that/]),
-	"All");
+is_deeply [ Lazy->columns('Primary') ],        [qw/this/],      "Pri";
+is_deeply [ sort Lazy->columns('Essential') ], [qw/opop this/], "Essential";
+is_deeply [ sort Lazy->columns('things') ],    [qw/that this/], "things";
+is_deeply [ sort Lazy->columns('horizon') ],   [qw/eep orp/],   "horizon";
+is_deeply [ sort Lazy->columns('vertical') ],  [qw/oop opop/],  "vertical";
+is_deeply [ sort Lazy->columns('All') ], [qw/eep oop opop orp that this/],
+	"All";
 
 {
 	my @groups = Lazy->__grouper->groups_for(Lazy->find_column('this'));
-	ok eq_set([ sort @groups ], [qw/things Essential Primary/]),
+	is_deeply [ sort @groups ], [qw/Essential Primary things/],
 		"this (@groups)";
 }
 
 {
 	my @groups = Lazy->__grouper->groups_for(Lazy->find_column('that'));
-	ok eq_set(\@groups, [qw/things/]), "that (@groups)";
+	is_deeply [@groups], [qw/things/], "that (@groups)";
+
 }
 
 Lazy->create({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });

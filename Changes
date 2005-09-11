@@ -1,4 +1,14 @@
-0.96
+3.0.1 UNRELEASED
+
+    - Code is identical to 0.96
+    - New section added to documentation on Release Philosophy
+    - Replace eq_set with is_deeply in t/04 to work around Test::More bug
+
+3.0.0 UNRELEASED
+
+    - IDENTICAL to 0.96. Only difference is version renumbering.
+
+0.96 30 April 2004
 
   New Functionality
     - Maintain live object index so subsequent requests for same row return 
