@@ -6,11 +6,8 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 23);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	Film->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
 
 sub valid_rating {
 	my $value = shift;
@@ -32,7 +29,7 @@ my %info = (
 	eval { Film->create({%info}) };
 	ok $@, $@;
 	ok !Film->retrieve($info{Title}), "No film created";
-	is(Film->retrieve_all, 1, "Only one film");
+	is(Film->retrieve_all, 0, "So no films");
 }
 
 ok(my $ver = Film->create({%info}), "Can create with valid rating");

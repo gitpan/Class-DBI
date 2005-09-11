@@ -6,16 +6,14 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 5);
 }
 
-INIT {
-	use lib 't/testlib';
-	require Film;
-	require Order;
-	Order->CONSTRUCT;
-	Film->CONSTRUCT;
-}
+use lib 't/testlib';
+require Film;
+require Order;
 
 Film->has_many(orders => 'Order');
 Order->has_a(film => 'Film');
+
+Film->create_test_film;
 
 my $film = Film->retrieve('Bad Taste');
 isa_ok $film => 'Film';

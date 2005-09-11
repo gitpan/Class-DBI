@@ -6,13 +6,9 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 18);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	use Blurb;
-	Film->CONSTRUCT;
-	Blurb->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
+use Blurb;
 
 is(Blurb->primary_column, "title", "Primary key of Blurb = title");
 is_deeply [ Blurb->_essential ], [ Blurb->primary_column ], "Essential = Primary";
@@ -22,6 +18,7 @@ is $@, "", "No problem retrieving non-existent Blurb";
 
 Film->might_have(info => Blurb => qw/blurb/);
 
+Film->create_test_film;
 {
 	ok my $bt = Film->retrieve('Bad Taste'), "Get Film";
 	isa_ok $bt, "Film";

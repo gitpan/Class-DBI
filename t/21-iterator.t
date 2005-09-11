@@ -6,11 +6,8 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 33);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	Film->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
 
 Film->retrieve_all->delete_all;
 

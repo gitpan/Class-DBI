@@ -14,10 +14,9 @@ INIT {
 	use lib 't/testlib';
 	use Film;
 	use Director;
-	Film->CONSTRUCT;
-	Director->CONSTRUCT;
 }
 
+Film->create_test_film;
 ok(my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 ok(my $pj = $btaste->Director, "Bad taste hasa() director");
 ok(!ref($pj), ' ... which is not an object');

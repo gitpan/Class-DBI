@@ -4,20 +4,19 @@ use Test::More;
 BEGIN {
 	eval "use DBD::SQLite";
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 30);
-
-	use lib 't/testlib';
-	use Film;
-	use Actor;
-	Film->CONSTRUCT;
-	Actor->CONSTRUCT;
-	Film->has_many(actors => Actor => 'Film', { order_by => 'name' });
-	Actor->has_a(Film => 'Film');
-	is(Actor->primary_column, 'id', "Actor primary OK");
 }
+
+use lib 't/testlib';
+use Film;
+use Actor;
+Film->has_many(actors => Actor => 'Film', { order_by => 'name' });
+Actor->has_a(Film => 'Film');
+is(Actor->primary_column, 'id', "Actor primary OK");
 
 ok(Actor->can('Salary'), "Actor table set-up OK");
 ok(Film->can('actors'),  " and have a suitable method in Film");
 
+Film->create_test_film;
 ok(my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 
 ok(

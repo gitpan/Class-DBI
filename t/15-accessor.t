@@ -12,8 +12,6 @@ INIT {
 	use lib 't/testlib';
 	require Film;
 	require Actor;
-	Film->create_movies_table;
-	Actor->create_actors_table;
 	Actor->has_a(film => 'Film');
 	sub Class::DBI::sheep { ok 0; }
 }

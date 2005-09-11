@@ -12,7 +12,6 @@ INIT {
 	use Film;
 }
 
-ok(Film->CONSTRUCT, "Construct Film table");
 ok(Film->can('db_Main'), 'set_db()');
 is(Film->__driver, "SQLite", "Driver set correctly");
 
@@ -35,6 +34,7 @@ is(Film->__driver, "SQLite", "Driver set correctly");
 eval { my $duh = Film->create; };
 like $@, qr/create needs a hashref/, "create needs a hashref";
 
+ok +Film->create_test_film, "Create a test film";
 my $btaste = Film->retrieve('Bad Taste');
 isa_ok $btaste, 'Film';
 is($btaste->Title,             'Bad Taste',     'Title() get');

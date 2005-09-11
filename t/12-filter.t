@@ -6,16 +6,12 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 50);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Actor;
-	use Film;
-	Actor->CONSTRUCT;
-	Film->CONSTRUCT;
-	Film->has_many(actors                => 'Actor');
-	Actor->has_a('film'                  => 'Film');
-	Actor->add_constructor(double_search => 'name = ? AND salary = ?');
-}
+use lib 't/testlib';
+use Actor;
+use Film;
+Film->has_many(actors                => 'Actor');
+Actor->has_a('film'                  => 'Film');
+Actor->add_constructor(double_search => 'name = ? AND salary = ?');
 
 my $film  = Film->create({ Title => 'MY Film' });
 my $film2 = Film->create({ Title => 'Another Film' });
@@ -158,7 +154,7 @@ Actor->iterator_class('Class::DBI::My::Iterator');
 {
 	my @acts = $film->actors->slice(1, 2);
 	is @acts, 2, "Slice gives 2 results";
-	ok eq_set(\@acts, [qw/fred barney/]), "Fred and Barney";
+	is_deeply [sort map "$_", @acts], [qw/barney fred/], "Fred and Barney";
 
 	ok $film->actors->delete_all, "Can delete via iterator";
 	is $film->actors, 0, "no actors left";

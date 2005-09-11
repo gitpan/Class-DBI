@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 35;
+use Test::More tests => 28;
 
 #-----------------------------------------------------------------------
 # Make sure that we can set up columns properly
@@ -7,6 +7,7 @@ use Test::More tests => 35;
 package State;
 
 use base 'Class::DBI';
+use Class::DBI::Column;
 
 State->table('State');
 State->columns('Primary',   'Name');
@@ -17,14 +18,12 @@ State->has_many(cities => "City");
 
 sub accessor_name {
 	my ($class, $column) = @_;
-	my $return = $column eq "Rain" ? "Rainfall" : $column;
-	return $return;
+	return $column eq "Rain" ? "Rainfall" : $column;
 }
 
 sub mutator_name {
 	my ($class, $column) = @_;
-	my $return = $column eq "Rain" ? "set_Rainfall" : "set_$column";
-	return "set_$column";
+	return $column eq "Rain" ? "set_Rainfall" : "set_$column";
 }
 
 sub Snowfall { 1 }
@@ -77,19 +76,13 @@ ok(State->find_column('Rain'), 'find_column Rain');
 ok(State->find_column('rain'), 'find_column rain');
 ok(!State->find_column('HGLAGAGlAG'), '!find_column HGLAGAGlAG');
 
-ok(!State->can('Rain'), 'No Rain accessor set up');
-ok(State->can('Rainfall'),           'Rainfall accessor set up');
-ok(State->can('_Rainfall_accessor'), ' with correct alias');
-ok(!State->can('_Rain_accessor'), ' (not by colname)');
-ok(!State->can('rain'),           ' (not normalized)');
-ok(State->can('set_Rain'),           'overriden mutator');
-ok(State->can('_set_Rain_accessor'), ' with alias');
+can_ok +State => qw/Rainfall _Rainfall_accessor set_Rainfall
+_set_Rainfall_accessor Snowfall _Snowfall_accessor set_Snowfall
+_set_Snowfall_accessor/;
 
-ok(State->can('Snowfall'),           'overridden accessor set up');
-ok(State->can('_Snowfall_accessor'), ' with alias');
-ok(!State->can('snowfall'), ' (not normalized)');
-ok(State->can('set_Snowfall'),           'overriden mutator');
-ok(State->can('_set_Snowfall_accessor'), ' with alias');
+foreach my $method (qw/Rain _Rain_accessor rain snowfall/) { 
+	ok !State->can($method), "State can't $method";
+}
 
 {
 	eval { my @grps = State->__grouper->groups_for("Huh"); };

@@ -8,6 +8,7 @@ lib/Class/DBI/Relationship.pm
 lib/Class/DBI/Relationship/HasA.pm
 lib/Class/DBI/Relationship/HasMany.pm
 lib/Class/DBI/Relationship/MightHave.pm
+lib/Class/DBI/Test/SQLite.pm
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
@@ -18,7 +19,6 @@ t/03-subclassing.t
 t/04-lazy.t
 t/05-Query.t
 t/06-hasa.t
-t/07-Move.t
 t/08-inheritcols.t
 t/09-has_many.t
 t/10-mysql.t
@@ -33,7 +33,7 @@ t/18-has_a.t
 t/19-set_sql.t
 t/21-iterator.t
 t/22-deflate_order.t
-t/97.pod.t
+t/97-pod.t
 t/98-failure.t
 t/99-misc.t
 t/testlib/Actor.pm

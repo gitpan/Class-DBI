@@ -6,11 +6,8 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 11);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	Film->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
 
 sub create_trigger2 { ::ok(1, "Running create trigger 2"); }
 sub delete_trigger  { ::ok(1, "Deleting " . shift->Title) }

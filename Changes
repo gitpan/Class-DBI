@@ -1,4 +1,34 @@
-3.0.1 UNRELEASED
+3.0.2 Sep 11 2005
+
+  Code
+    - No changes
+
+  Pre-Reqs
+    - Fixed code to explicitly need 5.6 (rather than just Makefile)
+    - Require 'version' for new 3 part versions
+
+  Tests
+    - Fixed t/01 to check mutator_name better
+    - Added NOT NULL to Primary in t/Blurb to avoid 0.95 regression
+    - Added new Test base class Class::DBI::Test::SQLite
+    - Changed all remaining uses of eq_set() to is_deeply()
+
+  Documentation
+    - Documented $obj->id() in list context (William McKee)
+    - Documented cascading delete for might_have (Tom Hukins)
+    - Documented MCFK better (plus fixed lots of typos etc) (Tom Hukins)
+    - Documented DBIx::ContextualFetch better
+    - select_val better (Dave Howorth)
+    - Fixed misspelling of Perrin Harkins
+    - Fixed documentation for the year constraint (Andy Lester)
+    - Fixed set_sql documentation to explain when it creates a method
+    - Fixed new_music documentation (Carl Johnstone)
+    - Fixed docs for CD columns to show 'reldate' (Mark Thomas)
+    - Fixed lots of other tiny doc issues
+    - Fixed docs for Essential (defaults to Primary, rather than All)
+    - Fixed docs for what gets passed to triggers (Ryan Tate)
+
+3.0.1 Sep 11 2005
 
     - Code is identical to 0.96
     - New section added to documentation on Release Philosophy
@@ -82,7 +112,7 @@
     - Handle stringification before Primary Key(s) are filled 
     - search() can take an overridden accessor name as a key
     - MultiColumn primary keys working better with ColumnGrouper [Perrin
-      Hawkins, Paul Makepeace, and Charles Bailey]
+      Harkins, Paul Makepeace, and Charles Bailey]
 
   Deprecations
     - _single_value_select and _single_row_select deprecated in favour

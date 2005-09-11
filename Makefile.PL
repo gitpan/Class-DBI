@@ -72,6 +72,7 @@ WriteMakefile(
 		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',
 		'UNIVERSAL::moniker'       => '0.06',
+		'version'                  => 0,
   },
 	dist              => { 
 		COMPRESS   => 'gzip -9',

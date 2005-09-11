@@ -13,7 +13,6 @@ BEGIN {
 INIT {
 	use lib 't/testlib';
 	use Lazy;
-	Lazy->CONSTRUCT;
 }
 
 is_deeply [ Lazy->columns('Primary') ],        [qw/this/],      "Pri";

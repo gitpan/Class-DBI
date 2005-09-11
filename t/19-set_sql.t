@@ -6,13 +6,9 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 15);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	use Actor;
-	Film->CONSTRUCT;
-	Actor->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
+use Actor;
 
 my $f1 = Film->create({ title => 'A', director => 'AA', rating => 'PG' });
 my $f2 = Film->create({ title => 'B', director => 'BA', rating => 'PG' });

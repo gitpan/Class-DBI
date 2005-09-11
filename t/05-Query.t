@@ -3,16 +3,14 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 19);
-
-	use lib 't/testlib';
-	use Film;
-	use Actor;
-	Film->CONSTRUCT;
-	Actor->CONSTRUCT;
-	Film->has_many(actors => Actor => { order_by => 'name' });
-	Actor->has_a(Film => 'Film');
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 20);
 }
+
+use lib 't/testlib';
+use Film;
+use Actor;
+Film->has_many(actors => Actor => { order_by => 'name' });
+Actor->has_a(Film => 'Film');
 
 my $film1 = Film->create({ title => 'Film 1', rating => 'U' });
 my $film2 = Film->create({ title => 'Film 2', rating => '15' });
@@ -98,7 +96,7 @@ $SIG{__WARN__} = sub {};
 {    # Restrict a has_many as class method
 	my @underpaid = Film->actors(salary  => 1);
 	my @under2    = Actor->search(salary => 1);
-	eq_set [ map $_->id, @underpaid ], [ map $_->id, @under2 ],
+	is_deeply [ sort map $_->id, @underpaid ], [ sort map $_->id, @under2 ],
 		"Can search on foreign key";
 }
 

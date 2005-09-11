@@ -6,14 +6,12 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 40);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	use Director;
-	Film->CONSTRUCT;
-	Director->CONSTRUCT;
-	@YA::Film::ISA = 'Film';
-}
+use lib 't/testlib';
+use Film;
+use Director;
+@YA::Film::ISA = 'Film';
+
+Film->create_test_film;
 
 ok my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste";
 ok my $pj = $btaste->Director, "Bad taste has a director";

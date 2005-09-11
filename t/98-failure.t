@@ -10,11 +10,10 @@ BEGIN {
 	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 7);
 }
 
-INIT {
-	use lib 't/testlib';
-	use Film;
-	Film->CONSTRUCT;
-}
+use lib 't/testlib';
+use Film;
+
+Film->create_test_film;
 
 {
 	my $btaste = Film->retrieve('Bad Taste');
