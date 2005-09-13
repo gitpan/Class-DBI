@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.3');
+use version; $VERSION = qv('3.0.4');
 
 use strict;
 
@@ -109,6 +109,8 @@ __PACKAGE__->__grouper(Class::DBI::ColumnGrouper->new());
 
 __PACKAGE__->mk_classdata('purge_object_index_every');
 __PACKAGE__->purge_object_index_every(1000);
+
+__PACKAGE__->add_searcher(search => "Class::DBI::Search::Basic",);
 
 __PACKAGE__->add_relationship_type(
 	has_a      => "Class::DBI::Relationship::HasA",
@@ -1081,32 +1083,31 @@ sub retrieve_from_sql {
 	return $class->sth_to_objects($class->sql_Retrieve($sql), \@vals);
 }
 
+sub add_searcher {
+	my ($self, %rels) = @_;
+	while (my ($name, $class) = each %rels) {
+		$self->_require_class($class);
+		$self->_croak("$class is not a valid Searcher")
+			unless $class->can('run_search');
+		no strict 'refs';
+		*{"$self\::$name"} = sub {
+			$class->new(@_)->run_search;
+		};
+	}
+}
+
+# This should really be its own Search subclass. But the _do_search
+# version has been publicised as the way to do this. We need to
+# deprecate this eventually.
+
 sub search_like { shift->_do_search(LIKE => @_) }
-sub search      { shift->_do_search("="  => @_) }
 
 sub _do_search {
-	my ($proto, $search_type, @args) = @_;
-	my $class = ref $proto || $proto;
-
-	@args = %{ $args[0] } if ref $args[0] eq "HASH";
-	my (@cols, @vals);
-	my $search_opts = @args % 2 ? pop @args : {};
-	while (my ($col, $val) = splice @args, 0, 2) {
-		my $column = $class->find_column($col)
-			|| (List::Util::first { $_->accessor eq $col } $class->columns)
-			|| $class->_croak("$col is not a column of $class");
-		push @cols, $column;
-		push @vals, $class->_deflated_column($column, $val);
-	}
-
-	my $frag = join " AND ",
-		map defined($vals[$_]) ? "$cols[$_] $search_type ?" : "$cols[$_] IS NULL",
-		0 .. $#cols;
-	$frag .= " ORDER BY $search_opts->{order_by}"
-		if $search_opts->{order_by};
-	return $class->sth_to_objects($class->sql_Retrieve($frag),
-		[ grep defined, @vals ]);
-
+	my ($class, $type, @args) = @_;
+	$class->_require_class('Class::DBI::Search::Basic');
+	my $search = Class::DBI::Search::Basic->new($class, @args);
+	$search->type($type);
+	$search->run_search;
 }
 
 #----------------------------------------------------------------------
@@ -3019,7 +3020,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.3
+example, is version 3.0.4
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

@@ -69,6 +69,7 @@ WriteMakefile(
 		'File::Temp'               => '0.12',
 		'Ima::DBI'                 => '0.33',
 		'List::Util'               => '1.00',
+		'Scalar::Util'             => '1.08',
 		'Storable'                 => '2.04',
 		'Test::More'               => '0.47',
 		'UNIVERSAL::moniker'       => '0.06',

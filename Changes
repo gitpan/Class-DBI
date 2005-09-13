@@ -1,3 +1,12 @@
+3.0.4 Sep 13 2005
+
+  Pre-Reqs
+    - Note requirement for Scalar::Util 1.08+ (for refaddr)
+
+  Refactorings
+    - Move to pluggable Search interface 
+       (includes reworking of search approach per Tim Bunce)
+
 3.0.3 Sep 11 2005
 
   Bug Fixes

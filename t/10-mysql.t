@@ -9,7 +9,7 @@ plan skip_all => "Need Date::Simple for this test" if $@;
 eval { require 't/testlib/MyFoo.pm' };
 plan skip_all => "Need MySQL for this test" if $@;
 
-plan tests => 64;
+plan tests => 68;
 
 package main;
 
@@ -171,3 +171,47 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 		"sorted by title";
 }
 
+{
+
+	package Class::DBI::Search::Test::Limited;
+	use base 'Class::DBI::Search::Basic';
+
+	sub fragment {
+		my $self = shift;
+		my $frag = $self->SUPER::fragment;
+		if (defined(my $limit = $self->opt('limit'))) {
+			$frag .= " LIMIT $limit";
+		}
+		return $frag;
+	}
+
+	package main;
+
+	MyFilm->add_searcher(search => "Class::DBI::Search::Test::Limited");
+
+	my @common = map MyFilm->create({ title => "Common Title" }), 1 .. 3;
+	{
+		my @ltd = MyFilm->search(
+			title => "Common Title",
+			{
+				order_by => 'filmid',
+				limit    => 1
+			}
+		);
+		is @ltd, 1, "Limit to one film";
+		is $ltd[0]->id, $common[0]->id, "The correct one";
+	}
+
+	{
+		my @ltd = MyFilm->search(
+			title => "Common Title",
+			{
+				order_by => 'filmid',
+				limit    => "1,1"
+			}
+		);
+		is @ltd, 1, "Limit to middle film";
+		is $ltd[0]->id, $common[1]->id, " - correctly";
+	}
+
+}
