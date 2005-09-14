@@ -78,9 +78,11 @@ Add or return a Column object for the given column name.
 =cut
 
 sub add_column {
-	my ($self, $name) = @_;
-	return $name if ref $name;
-	$self->{_allcol}->{ lc $name } ||= Class::DBI::Column->new($name);
+	my ($self, $col) = @_;
+
+	# TODO remove this
+	croak "Need a Column, got $col" unless $col->isa("Class::DBI::Column");
+	$self->{_allcol}->{ $col->name_lc } ||= $col;
 }
 
 sub find_column {

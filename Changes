@@ -1,3 +1,14 @@
+3.0.5 Sep 14 2005
+
+  - has_many can take compile time constraints (Cees Hek)
+  - has_many can take a cascading delete strategy (deprecating the old,
+    undocumented, 'no_cascade_delete' option)
+  - columns() can take Class::DBI::Column objects directly
+    which can now in turn take options, thus allowing things like:
+      __PACKAGE__->columns(dates => Class::DBI::Column->new(
+        tdate => { placeholder => 'IF(1, CURDATE(), ?)' }
+      )
+
 3.0.4 Sep 13 2005
 
   Pre-Reqs

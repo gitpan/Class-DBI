@@ -1,5 +1,9 @@
 Changes
 lib/Class/DBI.pm
+lib/Class/DBI/Attribute.pm
+lib/Class/DBI/Cascade/Delete.pm
+lib/Class/DBI/Cascade/Fail.pm
+lib/Class/DBI/Cascade/None.pm
 lib/Class/DBI/Column.pm
 lib/Class/DBI/ColumnGrouper.pm
 lib/Class/DBI/Iterator.pm
@@ -9,10 +13,12 @@ lib/Class/DBI/Relationship/HasA.pm
 lib/Class/DBI/Relationship/HasMany.pm
 lib/Class/DBI/Relationship/MightHave.pm
 lib/Class/DBI/Search/Basic.pm
+lib/Class/DBI/SearchGenerator.pm
 lib/Class/DBI/Test/SQLite.pm
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
+META.yml			Module meta-data (added by MakeMaker)
 README
 t/01-columns.t
 t/02-Film.t
@@ -34,6 +40,7 @@ t/18-has_a.t
 t/19-set_sql.t
 t/21-iterator.t
 t/22-deflate_order.t
+t/23-cascade.t
 t/97-pod.t
 t/98-failure.t
 t/99-misc.t
@@ -54,4 +61,3 @@ t/testlib/MyStarLinkMCPK.pm
 t/testlib/Order.pm
 t/testlib/OtherFilm.pm
 t/testlib/PgBase.pm
-META.yml                                 Module meta-data (added by MakeMaker)

@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.4');
+use version; $VERSION = qv('3.0.5');
 
 use strict;
 
@@ -297,13 +297,17 @@ sub columns {
 	return $class->__grouper->group_cols($group);
 }
 
+sub _column_class { 'Class::DBI::Column' }
+
 sub _set_columns {
 	my ($class, $group, @columns) = @_;
 
+	my @cols = map ref $_ ? $_ : $class->_column_class->new($_), @columns;
+
 	# Careful to take copy
 	$class->__grouper(Class::DBI::ColumnGrouper->clone($class->__grouper)
-			->add_group($group => @columns));
-	$class->_mk_column_accessors(@columns);
+			->add_group($group => @cols));
+	$class->_mk_column_accessors(@cols);
 	return @columns;
 }
 
@@ -383,7 +387,7 @@ sub _add_data_type {
 
 sub _mk_column_accessors {
 	my $class = shift;
-	foreach my $obj ($class->_find_columns(@_)) {
+	foreach my $obj (@_) {
 		my %method = (
 			_ro_ => $obj->accessor($class->accessor_name($obj->name)) || "",
 			_wo_ => $obj->mutator($class->mutator_name($obj->name))   || "",
@@ -2439,6 +2443,29 @@ The above is exactly equivalent to:
 For an example of where this is useful see L<"MANY TO MANY RELATIONSHIPS">
 below.
 
+=head3 Cascading Delete
+    
+  Music::Artist->has_many(cds => 'Music::CD', { cascade => 'Fail' });
+
+It is also possible to control what happens to the 'child' objects when
+the 'parent' object is deleted. By default this is set to 'Delete' - so,
+for example, when you delete an artist, you also delete all their CDs,
+leaving no orphaned records. However you could also set this to 'None',
+which would leave all those orphaned records (although this generally
+isn't a good idea), or 'Fail', which will throw an exception when you
+try to delete an artist that still has any CDs.
+
+You can also write your own Cascade strategies by supplying a Class
+Name here.
+
+For example you could write a Class::DBI::Cascade::Plugin::Nullify
+which would set all related foreign keys to be NULL, and plug it into
+your relationship:
+
+  Music::Artist->has_many(cds => 'Music::CD', { 
+    cascade => 'Class::DBI::Cascade::Plugin::Nullify' 
+  });
+
 =head2 might_have
 
   Music::CD->might_have(method_name => Class => (@fields_to_import));
@@ -3020,19 +3047,21 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.4
+example, is version 3.0.5
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases
 (e.g. 3.1.0). Those who like living more on the cutting edge can keep up
 to date with minor sub-version releases. 
 
-In general the minor-version releases will be for bug fixes and
-refactorings, whereas new functionality will be held-off until major
-sub-version releases.
-
-Of course, these aren't hard and fast rules, and we'll need to see how
-this all goes.
+Functionality which was introduced during a minor sub-version release may
+disappear without warning in a later minor sub-version release. I'll try
+to avoid doing this, and will aim to have a deprecation cycle of at least
+a few minor sub-versions, but you should keep a close eye on the CHANGES
+file, and have good tests in place. (This is good advice generally,
+of course.) Anything that is in a major sub-version release will go
+through a deprecation cycle of at least one further major sub-version
+before it is removed (and usually longer).
 
 =head2 Getting changes accepted
 

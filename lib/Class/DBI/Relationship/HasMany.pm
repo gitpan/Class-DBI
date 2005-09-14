@@ -57,13 +57,18 @@ sub _set_up_class_data {
 
 sub triggers {
 	my $self = shift;
-	return if $self->args->{no_cascade_delete};    # undocumented and untestsd!
-	return (
-		before_delete => sub {
-			$self->foreign_class->search($self->args->{foreign_key} => shift->id)
-				->delete_all;
-		}
-	);
+	if ($self->args->{no_cascade_delete}) {    # old undocumented way
+		warn "no_cascade_delete deprecated in favour of cascade => None";
+		return;
+	}
+	my $strategy = $self->args->{cascade} || "Delete";
+	$strategy = "Class::DBI::Cascade::$strategy" unless $strategy =~ /::/;
+
+	$self->foreign_class->_require_class($strategy);
+	$strategy->can('cascade')
+		or return $self->_croak("$strategy is not a valid Cascade Strategy");
+	my $strat_obj = $strategy->new($self);
+	return (before_delete => sub { $strat_obj->cascade(@_) });
 }
 
 sub methods {
@@ -89,6 +94,17 @@ sub _method_add_to {
 		my ($f_class, $f_key, $args) =
 			($meta->foreign_class, $meta->args->{foreign_key}, $meta->args);
 		$data->{$f_key} = $self->id;
+
+		# See if has_many constraints were defined and auto fill them
+		if (defined $args->{constraint} && ref $args->{constraint} eq 'HASH') {
+			while (my ($k, $v) = each %{ $args->{constraint} }) {
+				$self->_croak(
+					"Can't add_to_$accessor with $k = $data->{$k} (must be $v)")
+					if defined($data->{$k}) && $data->{$k} ne $v;
+				$data->{$k} = $v;
+			}
+		}
+
 		$f_class->create($data);
 	};
 }
@@ -115,6 +131,8 @@ sub _hm_run_search {
 		my ($f_class, $f_key, $args) =
 			($meta->foreign_class, $meta->args->{foreign_key}, $meta->args);
 		if (ref $self) {    # For $artist->cds
+			unshift @search_args, %{ $args->{constraint} }
+				if defined($args->{constraint}) && ref $args->{constraint} eq 'HASH';
 			unshift @search_args, ($f_key => $self->id);
 			push @search_args, { order_by => $args->{order_by} }
 				if defined $args->{order_by};

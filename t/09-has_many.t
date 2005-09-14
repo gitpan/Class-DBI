@@ -3,13 +3,22 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 30);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 41);
 }
 
 use lib 't/testlib';
 use Film;
 use Actor;
+use Director;
+
 Film->has_many(actors => Actor => 'Film', { order_by => 'name' });
+Director->has_many(films => Film => 'Director', { order_by => 'title' });
+Director->has_many(
+	r_rated_films =>
+		Film        => 'Director',
+	{ order_by => 'title', constraint => { Rating => 'R' } }
+);
+
 Actor->has_a(Film => 'Film');
 is(Actor->primary_column, 'id', "Actor primary OK");
 
@@ -104,4 +113,54 @@ eval { my $name = $as->set_Name };
 ok $@, $@;
 
 is($as->Name, 'Arnold Schwarzenegger', "Arnie's still Arnie");
+
+ok(my $director = Director->create({ Name => 'Director 1', }),
+	'create Director');
+
+ok(
+	$director->add_to_films(
+		{
+			Title    => 'Film 1',
+			Director => 'Director 1',
+			Rating   => 'PG',
+		}
+	),
+	'add_to_films'
+);
+
+ok(
+	$director->add_to_r_rated_films(
+		{
+			Title    => 'Film 2',
+			Director => 'Director 1',
+		}
+	),
+	'add_to_r_rated_films'
+);
+
+eval {
+	$director->add_to_r_rated_films(
+		{
+			Title    => 'Film 3',
+			Director => 'Director 1',
+			Rating   => 'G',
+		}
+	);
+};
+ok $@, $@;
+
+{
+	my @films = $director->films;
+	is(@films, 2, "Director 1 has three films");
+	is $films[0]->Title,  "Film 1", "Film 1";
+	is $films[0]->Rating, "PG",     "is PG";
+	is $films[1]->Title,  "Film 2", "Film 2";
+	is $films[1]->Rating, "R",      "is R";
+}
+
+{
+	my @films = $director->r_rated_films;
+	is @films, 1, "... but only 1 R-Rated";
+	is $films[0]->Title, "Film 2", "- Film 2";
+}
 

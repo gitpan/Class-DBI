@@ -12,7 +12,7 @@ use Class::DBI::Column;
 State->table('State');
 State->columns(Essential => qw/Abbreviation Name/);
 State->columns(Primary =>   'Name');
-State->columns(Weather =>   qw/Rain Snowfall/);
+State->columns(Weather =>   qw/Rain/, Class::DBI::Column->new('Snowfall'));
 State->columns(Other =>     qw/Capital Population/);
 State->has_many(cities => "City");
 

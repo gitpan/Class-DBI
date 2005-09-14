@@ -27,10 +27,10 @@ dealing with this directly.
 
 use strict;
 use base 'Class::Accessor';
+use Carp;
 
 __PACKAGE__->mk_accessors(
-	qw/name accessor mutator placeholder
-		is_constrained/
+	qw/name accessor mutator placeholder is_constrained/
 );
 
 use overload
@@ -46,12 +46,15 @@ A new object for this column.
 =cut
 
 sub new {
-	my ($class, $name) = @_;
+	my $class = shift;
+	my $name  = shift or croak "Column needs a name";
+	my $opt   = shift || {};
 	return $class->SUPER::new(
 		{
 			name        => $name,
 			_groups     => {},
-			placeholder => '?'
+			placeholder => '?',
+			%$opt,
 		}
 	);
 }
