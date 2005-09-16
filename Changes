@@ -1,3 +1,10 @@
+3.0.6 Sep 16 2005
+
+  - constrain_column can now take subref constraint
+  - Document DBD::AnyData and FreeTDS issues (Matt Trout)
+  - Factor out database error handling to _db_error()
+  - Switch to Class::Accessor::Fast in Column and Relationship 
+
 3.0.5 Sep 14 2005
 
   - has_many can take compile time constraints (Cees Hek)

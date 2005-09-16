@@ -3,7 +3,7 @@ package Class::DBI::Relationship;
 use strict;
 use warnings;
 
-use base 'Class::Accessor';
+use base 'Class::Accessor::Fast';
 
 __PACKAGE__->mk_accessors(qw/name class accessor foreign_class args/);
 

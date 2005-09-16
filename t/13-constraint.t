@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 23);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 26);
 }
 
 use lib 't/testlib';
@@ -51,18 +51,18 @@ ok $ver->delete, "Delete";
 Film->add_constraint('valid director', Director => sub { 1 });
 my $fred = Film->create({ Rating => '12' });
 
-# this test is a bit problematical because we don't supply a primary key
+# this test is a bit problematic because we don't supply a primary key
 # to the create() and the table doesn't use auto_increment or a sequence.
 ok $fred, "Got fred";
 
 {
 	ok +Film->constrain_column(rating => [qw/U PG 12 15 19/]),
-		"constraint_column";
+		"constrain_column";
 	my $narrower = eval { Film->create({ Rating => 'Uc' }) };
 	like $@, qr/fails.*constraint/, "Fails listref constraint";
 	my $ok = eval { Film->create({ Rating => 'U' }) };
 	is $@, '', "Can create with rating U";
-	ok +Film->find_column('rating')->is_constrained, "Rating is constrained";
+	ok +Film->find_column('rating')->is_constrained,   "Rating is constrained";
 	ok +Film->find_column('director')->is_constrained, "Director is not";
 }
 
@@ -91,6 +91,14 @@ ok $fred, "Got fred";
 		eval { Film->create({ title => "The Freaa", codirector => 'today' }) };
 	is $@, '', "Can create codirector";
 	is $freeaa->codirector, '2001-03-03', "Set the codirector";
+}
+
+{
+	ok +Film->constrain_column(title => sub { length() <= 10 }), "and again";
+	my $toolong = eval { Film->create({ Title => 'The Wonderful' }) };
+	like $@, qr/fails.*constraint/, "Can't create too long title";
+	my $then = eval { Film->create({ Title => 'The Blob' }) };
+	is $@, '', "But can create The XXX";
 }
 
 __DATA__

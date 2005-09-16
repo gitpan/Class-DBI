@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.5');
+use version; $VERSION = qv('3.0.6');
 
 use strict;
 
@@ -232,6 +232,12 @@ sub _carp {
 sub _croak {
 	my ($self, $msg) = @_;
 	Carp::croak($msg || $self);
+}
+
+sub _db_error {
+	my ($self, %info) = @_;
+	my $msg = delete $info{msg};
+	return $self->_croak($msg, %info);
 }
 
 #----------------------------------------------------------------------
@@ -654,8 +660,8 @@ sub _insert_row {
 	};
 	if ($@) {
 		my $class = ref $self;
-		return $self->_croak(
-			"Can't insert new $class: $@",
+		return $self->_db_error(
+			msg    => "Can't insert new $class: $@",
 			err    => $@,
 			method => 'create'
 		);
@@ -761,7 +767,11 @@ sub delete {
 
 	eval { $self->sql_DeleteMe->execute($self->id) };
 	if ($@) {
-		return $self->_croak("Can't delete $self: $@", err => $@);
+		return $self->_db_error(
+			msg    => "Can't delete $self: $@",
+			err    => $@,
+			method => 'delete'
+		);
 	}
 	$self->call_trigger('after_delete');
 	undef %$self;
@@ -800,7 +810,13 @@ sub update {
 	my $sth             = $self->sql_update($self->_update_line);
 	$class->_bind_param($sth, \@changed_cols);
 	my $rows = eval { $sth->execute($self->_update_vals, $self->id); };
-	return $self->_croak("Can't update $self: $@", err => $@) if $@;
+	if ($@) {
+		return $self->_db_error(
+			msg    => "Can't update $self: $@",
+			err    => $@,
+			method => 'update'
+		);
+	}
 
 	# enable this once new fixed DBD::SQLite is released:
 	if (0 and $rows != 1) {    # should always only update one row
@@ -981,6 +997,9 @@ sub constrain_column {
 		$class->add_constraint(list => $col => sub { exists $hash{ +shift } });
 	} elsif (ref $how eq "Regexp") {
 		$class->add_constraint(regexp => $col => sub { shift =~ $how });
+	} elsif (ref $how eq "CODE") {
+		$class->add_constraint(
+			code => $col => sub { local $_ = $_[0]; $how->($_) });
 	} else {
 		my $try_method = sprintf '_constrain_by_%s', $how->moniker;
 		if (my $dispatch = $class->can($try_method)) {
@@ -1449,7 +1468,7 @@ Let's look at all that in more detail:
 
 This sets up a database connection with the given information. 
 
-This uses Ima::DBI to set up an inheritable connection (named Main). It is 
+This uses L<Ima::DBI> to set up an inheritable connection (named Main). It is 
 therefore usual to only set up a connection() in your application base class 
 and let the 'table' classes inherit from it.
 
@@ -1479,7 +1498,7 @@ you're doing) by supplying your own \%attr parameter. For example:
 
   Music::DBI->connection(dbi:foo:dbname','user','pass',{ChopBlanks=>0});
 
-The RootClass of DBIx::ContextualFetch in also inherited from Ima::DBI,
+The RootClass of L<DBIx::ContextualFetch> in also inherited from L<Ima::DBI>,
 and you should be very careful not to change this unless you know what
 you're doing!
 
@@ -1494,7 +1513,7 @@ method rather than calling L<connection>(). This method should return a
 valid database handle, and should ensure it sets the standard attributes
 described above, preferably by combining $class->_default_attributes()
 with your own. Note, this handle *must* have its RootClass set to
-DBIx::ContextualFetch, so it is usually not possible to just supply a
+L<DBIx::ContextualFetch>, so it is usually not possible to just supply a
 $dbh obtained elsewhere.
 
 Note that connection information is class data, and that changing it
@@ -1548,7 +1567,7 @@ then you should declare this using the sequence() method:
 Class::DBI will use the sequence to generate a primary key value when
 objects are created without one.
 
-*NOTE* This method does not work for Oracle. However, Class::DBI::Oracle
+*NOTE* This method does not work for Oracle. However, L<Class::DBI::Oracle>
 (which can be downloaded separately from CPAN) provides a suitable
 replacement sequence() method.
 
@@ -1877,17 +1896,19 @@ This is probably a bug and is likely to change in future.
 
   Film->constrain_column(year => qr/^\d{4}$/);
   Film->constrain_column(rating => [qw/U Uc PG 12 15 18/]);
+  Film->constrain_column(title => sub { length() <= 20 });
 
 Simple anonymous constraints can also be added to a column using the
 constrain_column() method.  By default this takes either a regex which
-must match, or a reference to a list of possible values.
+must match, a reference to a list of possible values, or a subref which
+will have $_ aliased to the value being set, and should return a
+true or false value.
 
 However, this behaviour can be extended (or replaced) by providing a
 constraint handler for the type of argument passed to constrain_column.
 This behavior should be provided in a method named "_constrain_by_$type",
 where $type is the moniker of the argument. For example, the
-two shown above would be provided by _constrain_by_array() and
-_constrain_by_regexp().
+year example above could be provided by _constrain_by_array().
 
 =head1 DATA NORMALIZATION
 
@@ -1980,7 +2001,7 @@ The default behaviour is simply to call Carp::carp().
 
 =head2 accessors
 
-Class::DBI inherits from Class::Accessor and thus provides individual
+Class::DBI inherits from L<Class::Accessor> and thus provides individual
 accessor methods for every column in your subclass.  It also overrides
 the get() and set() methods provided by Accessor to automagically handle
 database reading and writing. (Note that as it doesn't make sense to
@@ -2640,7 +2661,7 @@ you can fall back on the fact that Class::DBI inherits from Ima::DBI
 and prefers to use its style of dealing with statements, via set_sql().
 
 The Class::DBI set_sql() method defaults to using prepare_cached()
-unless the $cache parameter is defined and false (see Ima::DBI docs for
+unless the $cache parameter is defined and false (see L<Ima::DBI> docs for
 more information).
 
 To assist with writing SQL that is inheritable into subclasses, several
@@ -2665,7 +2686,7 @@ similarly be:
      WHERE year > ?
   });
 
-For such 'SELECT' queries Ima::DBI's set_sql() method is extended to
+For such 'SELECT' queries L<Ima::DBI>'s set_sql() method is extended to
 create a helper shortcut method, named by prefixing the name of the
 SQL fragment with 'search_'. Thus, the above call to set_sql() will
 automatically set up the method Music::CD->search_new_music(), which
@@ -3020,9 +3041,11 @@ are some issues with multi-case column/table names. Beyond that lies
 The Great Unknown(tm). If you have access to other databases, please
 give this a test run, and let me know the results.
 
-This is known not to work with DBD::RAM. As a minimum it requires a
-database that supports table aliasing, and a DBI driver that supports
-placeholders.
+L<Ima::DBI> (and hence Class::DBI) requires a database that supports
+table aliasing and a DBI driver that supports placeholders. This means
+it won't work with older releases of L<DBD::AnyData> (and any releases
+of its predecessor L<DBD::RAM>), and L<DBD::Sybase> + FreeTDS may or
+may not work depending on your FreeTDS version.
 
 =head1 CURRENT AUTHOR
 
@@ -3047,7 +3070,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.5
+example, is version 3.0.6
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases
@@ -3089,12 +3112,12 @@ higher chance that nothing will every happen about your problem).
 If you're reporting a bug then it has a much higher chance of getting
 fixed quicker if you can include a failing test case. This should be
 a completely stand-alone test that could be added to the Class::DBI
-distribution. That is, it should use Test::Simple or Test::More, fail
-with the current code, but pass when I fix the problem. If it needs to
-have a working database to show the problem, then this should preferably
-use SQLite, and come with all the code to set this up. The nice people
-on the mailing list will probably help you out if you need assistance
-putting this together.
+distribution. That is, it should use L<Test::Simple> or L<Test::More>,
+fail with the current code, but pass when I fix the problem. If it
+needs to have a working database to show the problem, then this should
+preferably use SQLite, and come with all the code to set this up. The
+nice people on the mailing list will probably help you out if you need
+assistance putting this together.
 
 You don't need to include code for actually fixing the problem, but of
 course it's often nice if you can. I may choose to fix it in a different

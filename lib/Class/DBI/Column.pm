@@ -26,7 +26,7 @@ dealing with this directly.
 =cut
 
 use strict;
-use base 'Class::Accessor';
+use base 'Class::Accessor::Fast';
 use Carp;
 
 __PACKAGE__->mk_accessors(

@@ -559,17 +559,20 @@ CONSTRAINTS
   constrain_column
       Film->constrain_column(year => qr/^\d{4}$/);
       Film->constrain_column(rating => [qw/U Uc PG 12 15 18/]);
+      Film->constrain_column(title => sub { length() <= 20 });
 
     Simple anonymous constraints can also be added to a column using the
     constrain_column() method. By default this takes either a regex which
-    must match, or a reference to a list of possible values.
+    must match, a reference to a list of possible values, or a subref which
+    will have $_ aliased to the value being set, and should return a true or
+    false value.
 
     However, this behaviour can be extended (or replaced) by providing a
     constraint handler for the type of argument passed to constrain_column.
     This behavior should be provided in a method named
     "_constrain_by_$type", where $type is the moniker of the argument. For
-    example, the two shown above would be provided by _constrain_by_array()
-    and _constrain_by_regexp().
+    example, the year example above could be provided by
+    _constrain_by_array().
 
 DATA NORMALIZATION
     Before an object is assigned data from the application (via create or a
@@ -1644,9 +1647,11 @@ SUPPORTED DATABASES
     Great Unknown(tm). If you have access to other databases, please give
     this a test run, and let me know the results.
 
-    This is known not to work with DBD::RAM. As a minimum it requires a
-    database that supports table aliasing, and a DBI driver that supports
-    placeholders.
+    Ima::DBI (and hence Class::DBI) requires a database that supports table
+    aliasing and a DBI driver that supports placeholders. This means it
+    won't work with older releases of DBD::AnyData (and any releases of its
+    predecessor DBD::RAM), and DBD::Sybase + FreeTDS may or may not work
+    depending on your FreeTDS version.
 
 CURRENT AUTHOR
     Tony Bowden
@@ -1667,7 +1672,7 @@ THANKS TO
 
 RELEASE PHILOSOPHY
     Class::DBI now uses a three-level versioning system. This release, for
-    example, is version 3.0.5
+    example, is version 3.0.6
 
     The general approach to releases will be that users who like a degree of
     stability can hold off on upgrades until the major sub-version increases
