@@ -142,8 +142,8 @@ INTRODUCTION
         of your columns, see "LAZY POPULATION"
 
     *Done.*
-        That's it! You now have a class with methods to create(),
-        retrieve(), search() for, update() and delete() objects from your
+        That's it! You now have a class with methods to "create",
+        "retrieve", "search" for, "update" and "delete" objects from your
         table, as well as accessors and mutators for each of the columns in
         that object (row).
 
@@ -195,7 +195,7 @@ CLASS METHODS
     the same schema to not have to duplicate an entire class hierarchy.
 
     The preferred method for doing this is to supply your own db_Main()
-    method rather than calling connection(). This method should return a
+    method rather than calling "connection". This method should return a
     valid database handle, and should ensure it sets the standard attributes
     described above, preferably by combining $class->_default_attributes()
     with your own. Note, this handle *must* have its RootClass set to
@@ -230,7 +230,7 @@ CLASS METHODS
 
     This can also be passed as a second argument to 'table':
 
-      __PACKAGE__-->table('orders', 'orders');
+      __PACKAGE__->table('orders', 'orders');
 
     As with table, this is inherited but can be overridden.
 
@@ -377,6 +377,9 @@ RETRIEVING OBJECTS
 
       @cds = Music::CD->search(year => 1990, { order_by=>'artist' });
 
+    This is passed through 'as is', enabling order_by clauses such as 'year
+    DESC, title'.
+
   search_like
       @objs = Class->search_like(column1 => $like_pattern, ....);
 
@@ -497,9 +500,9 @@ TRIGGERS
     specify the order in which they will be run.
 
     All triggers are passed the object they are being fired for, except when
-    "before_set_$column" is fired during create, in which case the class is
-    passed in place of the object, which does not yet exist. You may change
-    object values if required.
+    "before_set_$column" is fired during "create", in which case the class
+    is passed in place of the object, which does not yet exist. You may
+    change object values if required.
 
     Some triggers are also passed extra parameters as name-value pairs. The
     individual triggers are further documented with the methods that trigger
@@ -693,37 +696,47 @@ INSTANCE METHODS
     the "select" trigger.
 
 Changing Your Column Accessor Method Names
-  accessor_name / mutator_name
-    If you want to change the name of your accessors, you need to provide an
-    accessor_name() method, which will convert a column name to a method
-    name.
+  accessor_name_for / mutator_name_for
+    It is possible to change the name of the accessor method created for a
+    column either declaratively or programmatically.
 
-    e.g: if your local naming convention was to prepend the word 'customer'
-    to each column in the 'customer' table, so that you had the columns
-    'customerid', 'customername' and 'customerage', you would end up with
-    code filled with calls to $customer->customerid,
-    $customer->customername, $customer->customerage etc. By creating an
-    accessor_name method like:
+    If, for example, you have a column with a name that clashes with a
+    method otherwise created by Class::DBI, such as 'meta_info', you could
+    create that Column explicitly with a different accessor (and/or mutator)
+    when setting up your columns:
 
-      sub accessor_name {
+            my $meta_col = Class::DBI::Column->new(meta_info => {
+                    accessor => 'metadata',
+            });
+
+      __PACKAGE__->columns(All => qw/id name/, $meta_col);
+
+    If you want to change the name of all your accessors, or all that match
+    a certain pattern, you need to provide an accessor_name_for($col)
+    method, which will convert a column name to a method name.
+
+    e.g: if your local database naming convention was to prepend the word
+    'customer' to each column in the 'customer' table, so that you had the
+    columns 'customerid', 'customername' and 'customerage', but you wanted
+    your methods to just be $customer->name and $customer->age rather than
+    $customer->customername etc., you could create a
+
+      sub accessor_name_for {
         my ($class, $column) = @_;
         $column =~ s/^customer//;
         return $column;
       }
 
-    Your methods would now be the simpler $customer->id, $customer->name and
-    $customer->age etc.
+    Similarly, if you wanted to have distinct accessor and mutator methods,
+    you could provide a mutator_name_for($col) method which would return the
+    name of the method to change the value:
 
-    Similarly, if you want to have distinct accessor and mutator methods,
-    you would provide a mutator_name() method which would return the name of
-    the method to change the value:
-
-      sub mutator_name {
+      sub mutator_name_for {
         my ($class, $column) = @_;
-        return "set_$column";
+        return "set_" . $column->accessor;
       }
 
-    If you override the mutator_name, then the accessor method will be
+    If you override the mutator name, then the accessor method will be
     enforced as read-only, and the mutator as write-only.
 
   update vs auto update
@@ -1430,8 +1443,12 @@ LAZY POPULATION
 
     This can potentially increase performance.
 
-    If you don't like this behavior, then just add all your non-primary key
-    columns to the one group, and Class::DBI will load everything at once.
+    If you don't like this behavior, then just add all your columns to the
+    Essential group, and Class::DBI will load everything at once. If you
+    have a single column primary key you can do this all in one shot with
+    one single column declaration:
+
+      Music::CD->columns(Essential => qw/cdid artist title year runlength/);
 
   columns
       my @all_columns  = $class->columns;
@@ -1672,7 +1689,7 @@ THANKS TO
 
 RELEASE PHILOSOPHY
     Class::DBI now uses a three-level versioning system. This release, for
-    example, is version 3.0.6
+    example, is version 3.0.7
 
     The general approach to releases will be that users who like a degree of
     stability can hold off on upgrades until the major sub-version increases

@@ -42,7 +42,7 @@ sub remap_arguments {
 	$args->{mapping}     = \@f_method;
 	$args->{foreign_key} = $f_key;
 	$args->{order_by} ||= $args->{sort};    # deprecated 0.96
-	warn "sort argumemt to has_many deprecated in favour of order_by"
+	warn "sort argument to has_many deprecated in favour of order_by"
 		if $args->{sort};                     # deprecated 0.96
 
 	return ($class, $accessor, $f_class, $args);

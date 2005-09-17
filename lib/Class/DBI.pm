@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.6');
+use version; $VERSION = qv('3.0.7');
 
 use strict;
 
@@ -74,6 +74,8 @@ sub _undefined_primary {
 		_commit_vals     => '_update_vals',         # 0.91
 		_commit_line     => '_update_line',         # 0.91
 		make_filter      => 'add_constructor',      # 0.93
+		accessor_name    => 'accessor_name_for',    # 3.0.7
+		mutator_name     => 'mutator_name_for',     # 3.0.7
 	);
 
 	no strict 'refs';
@@ -381,28 +383,28 @@ sub _add_data_type {
 }
 
 # Make a set of accessors for each of a list of columns. We construct
-# the method name by calling accessor_name() and mutator_name() with the
-# normalized column name.
+# the method name by calling accessor_name_for() and mutator_name_for()
+# with the normalized column name.
 
-# mutator_name will be the same as accessor_name unless you override it.
+# mutator name will be the same as accessor name unless you override it.
 
 # If both the accessor and mutator are to have the same method name,
-# (which will always be true unless you override mutator_name), a read-write
-# method is constructed for it. If they differ we create both a read-only
-# accessor and a write-only mutator.
+# (which will always be true unless you override mutator_name_for), a
+# read-write method is constructed for it. If they differ we create both
+# a read-only accessor and a write-only mutator.
 
 sub _mk_column_accessors {
 	my $class = shift;
-	foreach my $obj (@_) {
+	foreach my $col (@_) {
 		my %method = (
-			_ro_ => $obj->accessor($class->accessor_name($obj->name)) || "",
-			_wo_ => $obj->mutator($class->mutator_name($obj->name))   || "",
+			_ro_ => $col->accessor($class->accessor_name_for($col)),
+			_wo_ => $col->mutator($class->mutator_name_for($col)),
 		);
 		%method = ('_' => $method{_ro_}) if $method{_ro_} eq $method{_wo_};
 		foreach my $type (keys %method) {
 			my $name     = $method{$type};
 			my $acc_type = "make${type}accessor";
-			my $accessor = $class->$acc_type($obj->name_lc);
+			my $accessor = $class->$acc_type($col->name_lc);
 			$class->_make_method($_, $accessor) for ($name, "_${name}_accessor");
 		}
 	}
@@ -419,14 +421,14 @@ sub _make_method {
 	$class->_make_method(lc $name => $method);
 }
 
-sub accessor_name {
+sub accessor_name_for {
 	my ($class, $column) = @_;
-	return $column;
+	return $column->accessor;
 }
 
-sub mutator_name {
+sub mutator_name_for {
 	my ($class, $column) = @_;
-	return $class->accessor_name($column);
+	return $column->mutator;
 }
 
 sub autoupdate {
@@ -1451,8 +1453,8 @@ your columns, see L</"LAZY POPULATION">
 
 =item I<Done.>
 
-That's it! You now have a class with methods to L<create>(),
-L<retrieve>(), L<search>() for, L<update>() and L<delete>() objects
+That's it! You now have a class with methods to L<"create">,
+L<"retrieve">, L<"search"> for, L<"update"> and L<"delete"> objects
 from your table, as well as accessors and mutators for each of the
 columns in that object (row).
 
@@ -1509,7 +1511,7 @@ dynamically, for example, to allow multiple databases with the same
 schema to not have to duplicate an entire class hierarchy.
 
 The preferred method for doing this is to supply your own db_Main()
-method rather than calling L<connection>(). This method should return a
+method rather than calling L<"connection">. This method should return a
 valid database handle, and should ensure it sets the standard attributes
 described above, preferably by combining $class->_default_attributes()
 with your own. Note, this handle *must* have its RootClass set to
@@ -1546,7 +1548,7 @@ be the same as the actual table name).
 
 This can also be passed as a second argument to 'table':
 
-  __PACKAGE__-->table('orders', 'orders');
+  __PACKAGE__->table('orders', 'orders');
 
 As with table, this is inherited but can be overridden.
 
@@ -1702,6 +1704,9 @@ hash of arguments with the key 'order_by':
 
   @cds = Music::CD->search(year => 1990, { order_by=>'artist' });
 
+This is passed through 'as is', enabling order_by clauses such
+as 'year DESC, title'.
+
 =head2 search_like
 
   @objs = Class->search_like(column1 => $like_pattern, ....);
@@ -1832,7 +1837,7 @@ You can create any number of triggers for each point, but you cannot
 specify the order in which they will be run. 
 
 All triggers are passed the object they are being fired for, except
-when C<before_set_$column> is fired during L<create>, in which case
+when C<before_set_$column> is fired during L<"create">, in which case
 the class is passed in place of the object, which does not yet exist.
 You may change object values if required.
 
@@ -2036,36 +2041,48 @@ the C<select> trigger.
 
 =head1 Changing Your Column Accessor Method Names
 
-=head2 accessor_name / mutator_name
+=head2 accessor_name_for / mutator_name_for
 
-If you want to change the name of your accessors, you need to provide an
-accessor_name() method, which will convert a column name to a method name.
+It is possible to change the name of the accessor method created for a
+column either declaratively or programmatically. 
 
-e.g: if your local naming convention was to prepend the word 'customer'
-to each column in the 'customer' table, so that you had the columns
-'customerid', 'customername' and 'customerage', you would end up with
-code filled with calls to $customer->customerid, $customer->customername,
-$customer->customerage etc. By creating an accessor_name method like:
+If, for example, you have a column with a name that clashes with a
+method otherwise created by Class::DBI, such as 'meta_info', you could
+create that Column explicitly with a different accessor (and/or
+mutator) when setting up your columns:
 
-  sub accessor_name {
+	my $meta_col = Class::DBI::Column->new(meta_info => {
+		accessor => 'metadata',
+	});
+
+  __PACKAGE__->columns(All => qw/id name/, $meta_col);
+
+If you want to change the name of all your accessors, or all that match
+a certain pattern, you need to provide an accessor_name_for($col) method, 
+which will convert a column name to a method name.
+
+e.g: if your local database naming convention was to prepend the word
+'customer' to each column in the 'customer' table, so that you had the
+columns 'customerid', 'customername' and 'customerage', but you wanted
+your methods to just be $customer->name and $customer->age rather than
+$customer->customername etc., you could create a
+
+  sub accessor_name_for {
     my ($class, $column) = @_;
     $column =~ s/^customer//;
     return $column;
   }
 
-Your methods would now be the simpler $customer->id, $customer->name and
-$customer->age etc.
+Similarly, if you wanted to have distinct accessor and mutator methods,
+you could provide a mutator_name_for($col) method which would return
+the name of the method to change the value:
 
-Similarly, if you want to have distinct accessor and mutator methods,
-you would provide a mutator_name() method which would return the name
-of the method to change the value:
-
-  sub mutator_name {
+  sub mutator_name_for {
     my ($class, $column) = @_;
-    return "set_$column";
+    return "set_" . $column->accessor;
   }
 
-If you override the mutator_name, then the accessor method will be
+If you override the mutator name, then the accessor method will be
 enforced as read-only, and the mutator as write-only.
 
 =head2 update vs auto update
@@ -2132,7 +2149,7 @@ The update setting for an object is not stored in the database.
 
   $obj->update;
 
-If L</autoupdate> is not enabled then changes you make to your object are
+If L<"autoupdate"> is not enabled then changes you make to your object are
 not reflected in the database until you call update().  It is harmless
 to call update() if there are no changes to be saved.  (If autoupdate
 is on there'll never be anything to save.)
@@ -2725,7 +2742,7 @@ write (with MySQL):
 
 If you also need to access the 'cds' value returned from this query,
 the best approach is to declare 'cds' to be a TEMP column. (See
-L</"Non-Persistent Fields"> below).
+L<"Non-Persistent Fields"> below).
 
 =head2 Class::DBI::AbstractSearch
 
@@ -2811,8 +2828,12 @@ to the database, but will bring back the 'runlength' whilst it's there.
 
 This can potentially increase performance.
 
-If you don't like this behavior, then just add all your non-primary key
-columns to the one group, and Class::DBI will load everything at once.
+If you don't like this behavior, then just add all your columns to the
+Essential group, and Class::DBI will load everything at once. If you
+have a single column primary key you can do this all in one shot with
+one single column declaration:
+
+  Music::CD->columns(Essential => qw/cdid artist title year runlength/);
 
 =head2 columns
 
@@ -3070,7 +3091,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.6
+example, is version 3.0.7
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

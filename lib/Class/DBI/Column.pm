@@ -52,6 +52,8 @@ sub new {
 	return $class->SUPER::new(
 		{
 			name        => $name,
+			accessor    => $name,
+			mutator     => $name,
 			_groups     => {},
 			placeholder => '?',
 			%$opt,

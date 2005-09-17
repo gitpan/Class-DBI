@@ -13,22 +13,22 @@ INIT {
 	require Film;
 	require Actor;
 	Actor->has_a(film => 'Film');
-	sub Class::DBI::sheep { ok 0; }
 }
+sub Class::DBI::sheep { fail "sheep() Method called"; }
 
-sub Film::mutator_name {
+sub Film::mutator_name_for {
 	my ($class, $col) = @_;
 	return "set_sheep" if lc $col eq "numexplodingsheep";
 	return $col;
 }
 
-sub Film::accessor_name {
+sub Film::accessor_name_for {
 	my ($class, $col) = @_;
 	return "sheep" if lc $col eq "numexplodingsheep";
 	return $col;
 }
 
-sub Actor::accessor_name {
+sub Actor::accessor_name_for {
 	my ($class, $col) = @_;
 	return "movie" if lc $col eq "film";
 	return $col;

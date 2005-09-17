@@ -1,3 +1,17 @@
+3.0.7 Sep 17 2005
+
+  - Make Column responsible for accessor() and mutator() so they can be
+    set up declaratively as well as programmatically (this means the
+    second argument to accessor_name and mutator_name is now a Column
+    object rather than its name, so you may need to check your case
+    sensitivity)
+  - Rename accessor/mutator_name to accessor/mutator_name_for
+  - Document that order_by clauses in sort() are passed through
+  - Make one-shot 'Essential' set up slightly more explicit in docs
+    (Adam Kennedy)
+  - Fix HasMany warning typo (argumemt) (Dan Friedman)
+  - Remove obsolete SearchGenerator code which had leaked out
+
 3.0.6 Sep 16 2005
 
   - constrain_column can now take subref constraint

@@ -15,7 +15,10 @@ __PACKAGE__->columns(TEMP      => qw/ nonpersistent /);
 __PACKAGE__->columns(Stringify => 'Name');
 __PACKAGE__->add_constructor(salary_between => 'salary >= ? AND salary <= ?');
 
-sub mutator_name { "set_$_[1]" }
+sub mutator_name_for {
+	my ($class, $column) = @_;
+	return "set_" . $column->name;
+}
 
 sub create_sql {
 	return qq{
