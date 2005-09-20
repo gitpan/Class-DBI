@@ -7,9 +7,10 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.7');
+use version; $VERSION = qv('3.0.8');
 
 use strict;
+use warnings;
 
 use base "Class::DBI::__::Base";
 
@@ -166,59 +167,17 @@ FROM   __TABLE__
 WHERE  __IDENTIFIER__
 
 
+__PACKAGE__->mk_classdata('sql_transformer_class');
+__PACKAGE__->sql_transformer_class('Class::DBI::SQL::Transformer');
+
 # Override transform_sql from Ima::DBI to provide some extra
 # transformations
 sub transform_sql {
 	my ($self, $sql, @args) = @_;
-
-	my %cmap;
-	my $expand_table = sub {
-		my ($class, $alias) = split /=/, shift, 2;
-		my $table = $class ? $class->table : $self->table;
-		$cmap{ $alias || $table } = $class || ref $self || $self;
-		($alias ||= "") &&= " $alias";
-		return $table . $alias;
-	};
-
-	my $expand_join = sub {
-		my $joins  = shift;
-		my @table  = split /\s+/, $joins;
-		my %tojoin = map { $table[$_] => $table[ $_ + 1 ] } 0 .. $#table - 1;
-		my @sql;
-		while (my ($t1, $t2) = each %tojoin) {
-			my ($c1, $c2) = map $cmap{$_}
-				|| $self->_croak("Don't understand table '$_' in JOIN"), ($t1, $t2);
-
-			my $join_col = sub {
-				my ($c1, $c2) = @_;
-				my $meta = $c1->meta_info('has_a');
-				my ($col) = grep $meta->{$_}->foreign_class eq $c2, keys %$meta;
-				$col;
-			};
-
-			my $col = $join_col->($c1 => $c2) || do {
-				($c1, $c2) = ($c2, $c1);
-				($t1, $t2) = ($t2, $t1);
-				$join_col->($c1 => $c2);
-			};
-
-			$self->_croak("Don't know how to join $c1 to $c2") unless $col;
-			push @sql, sprintf " %s.%s = %s.%s ", $t1, $col, $t2,
-				$c2->primary_column;
-		}
-		return join " AND ", @sql;
-	};
-
-	$sql =~ s/__TABLE\(?(.*?)\)?__/$expand_table->($1)/eg;
-	$sql =~ s/__JOIN\((.*?)\)__/$expand_join->($1)/eg;
-	$sql =~ s/__ESSENTIAL__/join ", ", $self->_essential/eg;
-	$sql =~
-		s/__ESSENTIAL\((.*?)\)__/join ", ", map "$1.$_", $self->_essential/eg;
-	if ($sql =~ /__IDENTIFIER__/) {
-		my $key_sql = join " AND ", map "$_=?", $self->primary_columns;
-		$sql =~ s/__IDENTIFIER__/$key_sql/g;
-	}
-	return $self->SUPER::transform_sql($sql => @args);
+	my $tclass = $self->sql_transformer_class;
+	$self->_require_class($tclass);
+	my $T = $tclass->new($self, $sql, @args);
+	return $self->SUPER::transform_sql($T->sql => $T->args);
 }
 
 #----------------------------------------------------------------------
@@ -1029,7 +988,15 @@ sub add_constraint {
 			my ($self, $value, $column_values) = @_;
 			$code->($value, $self, $column, $column_values)
 				or return $self->_croak(
-				"$class $column fails '$name' constraint with '$value'");
+				"$class $column fails '$name' constraint with '$value'",
+				method         => "before_set_$column",
+				exception_type => 'constraint_failure',
+				data           => {
+					column          => $column,
+					value           => $value,
+					constraint_name => $name,
+				}
+				);
 		}
 	);
 }
@@ -1887,6 +1854,9 @@ The constraints are applied to all the columns being set before the
 object data is changed. Attempting to create or modify an object
 where one or more constraint fail results in an exception and the object
 remains unchanged.
+
+The exception thrown has its data set to a hashref of the column being
+changed and the value being changed to. 
 
 Note 1: Constraints are implemented using before_set_$column triggers.
 This will only prevent you from setting these values through a
@@ -3091,7 +3061,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.7
+example, is version 3.0.8
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

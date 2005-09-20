@@ -12,8 +12,12 @@ sub remap_arguments {
 		unless $accessor;
 	return $class->_croak($class->name . " needs a foreign class")
 		unless $f_class;
-	$class->can($accessor)
-		and return $class->_carp("$accessor method already exists in $class\n");
+
+	{
+		no strict 'refs';
+		defined &{"$class\::$accessor"}
+			and return $class->_carp("$accessor method already exists in $class\n");
+	}
 
 	my @f_method = ();
 	if (ref $f_class eq "ARRAY") {

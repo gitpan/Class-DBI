@@ -13,6 +13,7 @@ lib/Class/DBI/Relationship/HasA.pm
 lib/Class/DBI/Relationship/HasMany.pm
 lib/Class/DBI/Relationship/MightHave.pm
 lib/Class/DBI/Search/Basic.pm
+lib/Class/DBI/SQL/Transformer.pm
 lib/Class/DBI/Test/SQLite.pm
 Makefile.PL
 MANIFEST			This list of files

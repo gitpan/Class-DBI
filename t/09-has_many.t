@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 41);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 42);
 }
 
 use lib 't/testlib';
@@ -163,4 +163,20 @@ ok $@, $@;
 	is @films, 1, "... but only 1 R-Rated";
 	is $films[0]->Title, "Film 2", "- Film 2";
 }
+
+# Subclass can override has_many
+
+package Film::Subclass;
+
+use base 'Film';
+
+eval { 
+	Film::Subclass->has_many(actors => Actor => 'Film', { order_by => 'id' });
+};
+
+package main;
+
+ok ! $@, "We can set up a has_many subclass";
+
+
 

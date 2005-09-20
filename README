@@ -550,6 +550,9 @@ CONSTRAINTS
     one or more constraint fail results in an exception and the object
     remains unchanged.
 
+    The exception thrown has its data set to a hashref of the column being
+    changed and the value being changed to.
+
     Note 1: Constraints are implemented using before_set_$column triggers.
     This will only prevent you from setting these values through a the
     provided create() or set() methods. It will always be possible to bypass
@@ -1689,7 +1692,7 @@ THANKS TO
 
 RELEASE PHILOSOPHY
     Class::DBI now uses a three-level versioning system. This release, for
-    example, is version 3.0.7
+    example, is version 3.0.8
 
     The general approach to releases will be that users who like a degree of
     stability can hold off on upgrades until the major sub-version increases

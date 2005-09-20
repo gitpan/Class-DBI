@@ -1,3 +1,10 @@
+3.0.8 Sep 20 2005
+
+  - constraint exceptions now set their 'data' (Dan Collis Puro)
+  - method created by has_many can now override method in parent class
+     (reported by Christopher H. Laco)
+  - factored out transform_sql for easier modification
+
 3.0.7 Sep 17 2005
 
   - Make Column responsible for accessor() and mutator() so they can be

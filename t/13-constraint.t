@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 26);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 28);
 }
 
 use lib 't/testlib';
@@ -39,13 +39,22 @@ ok $ver->Rating(12), "Change to 12";
 ok $ver->update, "And update";
 is $ver->Rating, 12, "Rating now 12";
 
-eval {
-	$ver->Rating(13);
-	$ver->update;
-};
-ok $@, $@;
-is $ver->Rating, 12, "Rating still 12";
-ok $ver->delete, "Delete";
+{
+	local *Film::_croak = sub { 
+		my ($self, $msg, %info) = @_;
+		die %info ?  bless \%info => "My::Error" : $msg;
+	};
+	eval {
+		$ver->Rating(13);
+		$ver->update;
+	};
+	isa_ok $@ => 'My::Error';
+	my $fail = $@->{data}{rating}{data};
+	is $fail->{column}->name_lc, "rating", "Rating fails";
+	is $fail->{value}, 13, "Can't set to 13";
+	is $ver->Rating, 12, "Rating still 12";
+	ok $ver->delete, "Delete";
+}
 
 # this threw an infinite loop in old versions
 Film->add_constraint('valid director', Director => sub { 1 });
