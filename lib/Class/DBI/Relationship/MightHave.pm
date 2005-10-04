@@ -58,7 +58,7 @@ sub _imported_accessor {
 			($meta->foreign_class, @{ $meta->args->{import} });
 		my $for_obj = $self->$method() || do {
 			my $val = shift or return;    # just fetching
-			$f_class->create(
+			$f_class->insert(
 				{ $f_class->primary_column => $self->id, $name => $val });
 			$self->$method();
 		};

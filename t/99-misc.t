@@ -106,14 +106,14 @@ package main;
 	});
 
 	package main;
-	eval { Holiday::Camp->create({}) };
+	eval { Holiday::Camp->insert({}) };
 	like $@, qr/Problem with Holiday/, '$self stringifies with no PK values';
 }
 
 eval { my $foo = Holiday->retrieve({ id => 1 }) };
 like $@, qr/retrieve a reference/, "Can't retrieve a reference";
 
-eval { my $foo = Holiday->create(id => 10) };
+eval { my $foo = Holiday->insert(id => 10) };
 like $@, qr/a hashref/, "Can't create without hashref";
 
 {
@@ -133,7 +133,7 @@ Holiday->_flesh('Blanket');
 eval { Holiday->ordered_search() };
 like $@, qr/order_by/, "ordered_search no longer works";
 
-eval { Holiday->create({ yonkey => 84 }) };
+eval { Holiday->insert({ yonkey => 84 }) };
 like $@, qr/not a column/, "Can't create with nonsense column";
 
 eval { Film->_require_class('Class::DBI::__::Nonsense') };

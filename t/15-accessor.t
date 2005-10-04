@@ -43,7 +43,7 @@ my $data = {
 eval {
 	my $data = $data;
 	$data->{NumExplodingSheep} = 1;
-	ok my $bt = Film->create($data), "Modified accessor - with column name";
+	ok my $bt = Film->insert($data), "Modified accessor - with column name";
 	isa_ok $bt, "Film";
 };
 is $@, '', "No errors";
@@ -51,7 +51,7 @@ is $@, '', "No errors";
 eval {
 	my $data = $data;
 	$data->{sheep} = 1;
-	ok my $bt = Film->create($data), "Modified accessor - with accessor";
+	ok my $bt = Film->insert($data), "Modified accessor - with accessor";
 	isa_ok $bt, "Film";
 };
 is $@, '', "No errors";
@@ -65,21 +65,21 @@ eval {
 
 	eval {
 		local $data->{set_sheep} = 1;
-		ok my $bt = Film->create($data), "Modified mutator - with mutator";
+		ok my $bt = Film->insert($data), "Modified mutator - with mutator";
 		isa_ok $bt, "Film";
 	};
 	is $@, '', "No errors";
 
 	eval {
 		local $data->{NumExplodingSheep} = 1;
-		ok my $bt = Film->create($data), "Modified mutator - with column name";
+		ok my $bt = Film->insert($data), "Modified mutator - with column name";
 		isa_ok $bt, "Film";
 	};
 	is $@, '', "No errors";
 
 	eval {
 		local $data->{sheep} = 1;
-		ok my $bt = Film->create($data), "Modified mutator - with accessor";
+		ok my $bt = Film->insert($data), "Modified mutator - with accessor";
 		isa_ok $bt, "Film";
 	};
 	is $@, '', "No errors";
@@ -91,8 +91,8 @@ eval {
 		name => 'Peter Jackson',
 		film => 'Bad Taste',
 	};
-	my $bt = Film->create($data);
-	my $ac = Actor->create($p_data);
+	my $bt = Film->insert($data);
+	my $ac = Actor->insert($p_data);
 
 	eval { my $f = $ac->film };
 	like $@, qr/Can't locate object method "film"/, "no hasa film";
@@ -106,7 +106,7 @@ eval {
 
 	{
 		local $data->{Title} = "Another film";
-		my $film = Film->create($data);
+		my $film = Film->insert($data);
 
 		eval { $ac->film($film) };
 		ok $@, $@;
@@ -132,7 +132,7 @@ eval {
 	ok(!Film->has_real_column('nonpersistent'), " - but it's not real");
 
 	{
-		my $film = Film->create({ Title => "Veronique", nonpersistent => 42 });
+		my $film = Film->insert({ Title => "Veronique", nonpersistent => 42 });
 		is $film->title,         "Veronique", "Title set OK";
 		is $film->nonpersistent, 42,          "As is non persistent value";
 		$film->remove_from_object_index;
@@ -161,8 +161,8 @@ eval {
 
 {
 	Film->autoupdate(1);
-	my $naked = Film->create({ title => 'Naked' });
-	my $sandl = Film->create({ title => 'Secrets and Lies' });
+	my $naked = Film->insert({ title => 'Naked' });
+	my $sandl = Film->insert({ title => 'Secrets and Lies' });
 
 	my $rating = 1;
 	my $update_failure = sub {
@@ -175,16 +175,16 @@ eval {
 	ok $naked->make_read_only, "Make Naked read only";
 	ok $update_failure->($naked), "Can't update Naked any more";
 	ok !$update_failure->($sandl), "But can still update Secrets and Lies";
-	my $july4 = eval { Film->create({ title => "4 Days in July" }) };
-	isa_ok $july4 => "Film", "And can still create new films";
+	my $july4 = eval { Film->insert({ title => "4 Days in July" }) };
+	isa_ok $july4 => "Film", "And can still insert new films";
 
 	ok(Film->make_read_only, "Make all Films read only");
 	ok $update_failure->($naked), "Still can't update Naked";
 	ok $update_failure->($sandl), "And can't update S&L any more";
 	eval { $july4->delete };
 	like $@, qr/read only/, "And can't delete 4 Days in July";
-	my $abigail = eval { Film->create({ title => "Abigail's Party" }) };
-	like $@, qr/read only/, "Or create new films";
+	my $abigail = eval { Film->insert({ title => "Abigail's Party" }) };
+	like $@, qr/read only/, "Or insert new films";
 	$SIG{__WARN__} = sub { };
 }
 

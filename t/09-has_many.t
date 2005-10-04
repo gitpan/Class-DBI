@@ -29,14 +29,14 @@ Film->create_test_film;
 ok(my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 
 ok(
-	my $pvj = Actor->create(
+	my $pvj = Actor->insert(
 		{
 			Name   => 'Peter Vere-Jones',
 			Film   => undef,
 			Salary => '30_000',             # For a voice!
 		}
 	),
-	'create Actor'
+	'insert Actor'
 );
 is $pvj->Name, "Peter Vere-Jones", "PVJ name ok";
 is $pvj->Film, undef, "No film";
@@ -86,7 +86,7 @@ eval {
 };
 is $@, '', "No errors";
 
-my $as = Actor->create(
+my $as = Actor->insert(
 	{
 		Name   => 'Arnold Schwarzenegger',
 		Film   => 'Terminator 2',
@@ -114,8 +114,8 @@ ok $@, $@;
 
 is($as->Name, 'Arnold Schwarzenegger', "Arnie's still Arnie");
 
-ok(my $director = Director->create({ Name => 'Director 1', }),
-	'create Director');
+ok(my $director = Director->insert({ Name => 'Director 1', }),
+	'insert Director');
 
 ok(
 	$director->add_to_films(

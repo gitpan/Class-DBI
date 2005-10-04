@@ -109,7 +109,7 @@ sub _method_add_to {
 			}
 		}
 
-		$f_class->create($data);
+		$f_class->insert($data);
 	};
 }
 

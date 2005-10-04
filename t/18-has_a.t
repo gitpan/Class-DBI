@@ -19,14 +19,14 @@ ok !ref($pj), ' ... which is not an object';
 
 ok(Film->has_a('director' => 'Director'), "Link Director table");
 ok(
-	Director->create(
+	Director->insert(
 		{
 			Name     => 'Peter Jackson',
 			Birthday => -300000000,
 			IsInsane => 1
 		}
 	),
-	'create Director'
+	'insert Director'
 );
 
 {
@@ -43,7 +43,7 @@ ok(
 }
 
 # Oh no!  Its Peter Jacksons even twin, Skippy!  Born one minute after him.
-my $sj = Director->create(
+my $sj = Director->insert(
 	{
 		Name     => 'Skippy Jackson',
 		Birthday => (-300000000 + 60),
@@ -104,7 +104,7 @@ is(
 
 	my $fail;
 	eval {
-		$fail = YA::Film->create(
+		$fail = YA::Film->insert(
 			{
 				Title             => 'Tastes Bad',
 				Director          => $sj,
@@ -117,7 +117,7 @@ is(
 	ok $@,    "Can't have film as codirector: $@";
 	is $fail, undef, "We didn't get anything";
 
-	my $tastes_bad = YA::Film->create(
+	my $tastes_bad = YA::Film->insert(
 		{
 			Title             => 'Tastes Bad',
 			Director          => $sj,

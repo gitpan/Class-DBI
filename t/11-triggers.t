@@ -29,7 +29,7 @@ Film->add_trigger(
 );
 
 ok(
-	my $ver = Film->create(
+	my $ver = Film->insert(
 		{
 			title    => 'La Double Vie De Veronique',
 			director => 'Kryzstof Kieslowski',
@@ -63,5 +63,5 @@ ok $ver->delete, "Delete";
 			ok !$self->_attribute_exists('title'), "PK doesn't auto-vivify";
 		}
 	);
-	Film->create({ director => "Me" });
+	Film->insert({ director => "Me" });
 }

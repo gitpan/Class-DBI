@@ -14,11 +14,11 @@ plan tests => 68;
 package main;
 
 ok(
-	my $bar = MyFoo->create({ name => "bar", val => 4, tdate => "2000-01-01" }),
+	my $bar = MyFoo->insert({ name => "bar", val => 4, tdate => "2000-01-01" }),
 	"bar"
 );
 ok(
-	my $baz = MyFoo->create({ name => "baz", val => 7, tdate => "2000-01-01" }),
+	my $baz = MyFoo->insert({ name => "baz", val => 7, tdate => "2000-01-01" }),
 	"baz"
 );
 is($baz->id, $bar->id + 1, "Auto incremented primary key");
@@ -40,25 +40,25 @@ is MyFoo->maximum_value_of("val"), 7, "max()";
 
 require './t/testlib/MyStarLinkMCPK.pm';
 
-ok(my $f1 = MyFilm->create({ title => "Veronique" }), "Create Veronique");
-ok(my $f2 = MyFilm->create({ title => "Red" }),       "Create Red");
+ok(my $f1 = MyFilm->insert({ title => "Veronique" }), "Create Veronique");
+ok(my $f2 = MyFilm->insert({ title => "Red" }),       "Create Red");
 
-ok(my $s1 = MyStar->create({ name => "Irene Jacob" }),      "Irene Jacob");
-ok(my $s2 = MyStar->create({ name => "Jerzy Gudejko" }),    "Create Jerzy");
-ok(my $s3 = MyStar->create({ name => "Frédérique Feder" }), "Create Fred");
+ok(my $s1 = MyStar->insert({ name => "Irene Jacob" }),      "Irene Jacob");
+ok(my $s2 = MyStar->insert({ name => "Jerzy Gudejko" }),    "Create Jerzy");
+ok(my $s3 = MyStar->insert({ name => "Frédérique Feder" }), "Create Fred");
 
-ok(my $l1 = MyStarLink->create({ film => $f1, star => $s1 }), "Link 1");
-ok(my $l2 = MyStarLink->create({ film => $f1, star => $s2 }), "Link 2");
-ok(my $l3 = MyStarLink->create({ film => $f2, star => $s1 }), "Link 3");
-ok(my $l4 = MyStarLink->create({ film => $f2, star => $s3 }), "Link 4");
+ok(my $l1 = MyStarLink->insert({ film => $f1, star => $s1 }), "Link 1");
+ok(my $l2 = MyStarLink->insert({ film => $f1, star => $s2 }), "Link 2");
+ok(my $l3 = MyStarLink->insert({ film => $f2, star => $s1 }), "Link 3");
+ok(my $l4 = MyStarLink->insert({ film => $f2, star => $s3 }), "Link 4");
 
-ok(my $lm1 = MyStarLinkMCPK->create({ film => $f1, star => $s1 }),
+ok(my $lm1 = MyStarLinkMCPK->insert({ film => $f1, star => $s1 }),
 	"Link MCPK 1");
-ok(my $lm2 = MyStarLinkMCPK->create({ film => $f1, star => $s2 }),
+ok(my $lm2 = MyStarLinkMCPK->insert({ film => $f1, star => $s2 }),
 	"Link MCPK 2");
-ok(my $lm3 = MyStarLinkMCPK->create({ film => $f2, star => $s1 }),
+ok(my $lm3 = MyStarLinkMCPK->insert({ film => $f2, star => $s1 }),
 	"Link MCPK 3");
-ok(my $lm4 = MyStarLinkMCPK->create({ film => $f2, star => $s3 }),
+ok(my $lm4 = MyStarLinkMCPK->insert({ film => $f2, star => $s3 }),
 	"Link MCPK 4");
 
 {    # Warnings for scalar context?
@@ -73,12 +73,12 @@ ok(my $lm4 = MyStarLinkMCPK->create({ film => $f2, star => $s3 }),
 }
 
 # try to create one with duplicate primary key
-my $lm5 = eval { MyStarLinkMCPK->create({ film => $f2, star => $s3 }) };
-ok(!$lm5, "Can't create duplicate");
-ok($@ =~ /^Can't insert .* duplicate/i, "Duplicate create caused exception");
+my $lm5 = eval { MyStarLinkMCPK->insert({ film => $f2, star => $s3 }) };
+ok(!$lm5, "Can't insert duplicate");
+ok($@ =~ /^Can't insert .* duplicate/i, "Duplicate insert caused exception");
 
 # create one to delete
-ok(my $lm6 = MyStarLinkMCPK->create({ film => $f2, star => $s2 }),
+ok(my $lm6 = MyStarLinkMCPK->insert({ film => $f2, star => $s2 }),
 	"Link MCPK 5");
 ok(my $lm7 = MyStarLinkMCPK->retrieve(film => $f2, star => $s2),
 	"Retrieve from table");
@@ -123,9 +123,9 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 }
 
 {    # cascades correctly
-	my $lenin  = MyFilm->create({ title    => "Leningrad Cowboys Go America" });
-	my $pimme  = MyStar->create({ name     => "Pimme Korhonen" });
-	my $cowboy = MyStarLink->create({ film => $lenin, star => $pimme });
+	my $lenin  = MyFilm->insert({ title    => "Leningrad Cowboys Go America" });
+	my $pimme  = MyStar->insert({ name     => "Pimme Korhonen" });
+	my $cowboy = MyStarLink->insert({ film => $lenin, star => $pimme });
 	$lenin->delete;
 	is MyStar->search(name => 'Pimme Korhonen')->count, 1, "Pimme still exists";
 	is MyStarLink->search(star => $pimme->id)->count, 0, "But in no films";
@@ -143,7 +143,7 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 }
 
 {
-	ok my $f0 = MyFilm->create({ filmid => 0, title => "Year 0" }),
+	ok my $f0 = MyFilm->insert({ filmid => 0, title => "Year 0" }),
 		"Create with explicit id = 0";
 	isa_ok $f0 => 'MyFilm';
 	is $f0->id, 0, "ID of 0";
@@ -189,7 +189,7 @@ my $to_ids = sub { join ":", sort map $_->id, @_ };
 
 	MyFilm->add_searcher(search => "Class::DBI::Search::Test::Limited");
 
-	my @common = map MyFilm->create({ title => "Common Title" }), 1 .. 3;
+	my @common = map MyFilm->insert({ title => "Common Title" }), 1 .. 3;
 	{
 		my @ltd = MyFilm->search(
 			title => "Common Title",

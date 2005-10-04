@@ -13,7 +13,7 @@ plan tests => 2;
 
 package main;
 
-my $log = Log->create( { message => 'initial message' } );
+my $log = Log->insert( { message => 'initial message' } );
 ok eval { $log->datetime_stamp }, "Have datetime";
 diag $@ if $@;
 

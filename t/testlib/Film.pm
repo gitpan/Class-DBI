@@ -22,7 +22,7 @@ sub create_sql {
 }
 
 sub create_test_film {
-	return shift->create(
+	return shift->insert(
 		{
 			Title             => 'Bad Taste',
 			Director          => 'Peter Jackson',

@@ -13,7 +13,7 @@ use Director;
 { # Cascade Strategies
 	Director->has_many(nasties => Film => { cascade => 'Fail' });
 
-	my $dir = Director->create({ name => "Nasty Noddy" });
+	my $dir = Director->insert({ name => "Nasty Noddy" });
 	my $kk = $dir->add_to_nasties({ Title => 'Killer Killers' });
 	is $kk->director, $dir, "Director set OK";
 	is $dir->nasties, 1, "We have one nasty";

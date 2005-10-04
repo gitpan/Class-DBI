@@ -13,32 +13,32 @@ Film->has_many(actors                => 'Actor');
 Actor->has_a('film'                  => 'Film');
 Actor->add_constructor(double_search => 'name = ? AND salary = ?');
 
-my $film  = Film->create({ Title => 'MY Film' });
-my $film2 = Film->create({ Title => 'Another Film' });
+my $film  = Film->insert({ Title => 'MY Film' });
+my $film2 = Film->insert({ Title => 'Another Film' });
 
 my @act = (
-	Actor->create(
+	Actor->insert(
 		{
 			name   => 'Actor 1',
 			film   => $film,
 			salary => 10,
 		}
 	),
-	Actor->create(
+	Actor->insert(
 		{
 			name   => 'Actor 2',
 			film   => $film,
 			salary => 20,
 		}
 	),
-	Actor->create(
+	Actor->insert(
 		{
 			name   => 'Actor 3',
 			film   => $film,
 			salary => 30,
 		}
 	),
-	Actor->create(
+	Actor->insert(
 		{
 			name   => 'Actor 4',
 			film   => $film2,

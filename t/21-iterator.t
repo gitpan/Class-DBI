@@ -12,12 +12,12 @@ use Film;
 Film->retrieve_all->delete_all;
 
 my @film  = (
-	Film->create({ Title => 'Film 1' }),
-	Film->create({ Title => 'Film 2' }),
-	Film->create({ Title => 'Film 3' }),
-	Film->create({ Title => 'Film 4' }),
-	Film->create({ Title => 'Film 5' }),
-	Film->create({ Title => 'Film 6' }),
+	Film->insert({ Title => 'Film 1' }),
+	Film->insert({ Title => 'Film 2' }),
+	Film->insert({ Title => 'Film 3' }),
+	Film->insert({ Title => 'Film 4' }),
+	Film->insert({ Title => 'Film 5' }),
+	Film->insert({ Title => 'Film 6' }),
 );
 
 {

@@ -35,7 +35,7 @@ is_deeply [ sort Lazy->columns('All') ], [qw/eep oop opop orp that this/],
 
 }
 
-Lazy->create({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
+Lazy->insert({ this => 1, that => 2, oop => 3, opop => 4, eep => 5 });
 
 ok(my $obj = Lazy->retrieve(1), 'Retrieve by Primary');
 ok($obj->_attribute_exists('this'),  "Gets primary");
@@ -62,17 +62,17 @@ ok(!$obj->_attribute_exists('that'), 'nor that');
 # Test contructor breaking.
 
 eval {    # Need a hashref
-	Lazy->create(this => 10, that => 20, oop => 30, opop => 40, eep => 50);
+	Lazy->insert(this => 10, that => 20, oop => 30, opop => 40, eep => 50);
 };
 ok($@, $@);
 
 eval {    # False column
-	Lazy->create({ this => 10, that => 20, theother => 30 });
+	Lazy->insert({ this => 10, that => 20, theother => 30 });
 };
 ok($@, $@);
 
 eval {    # Multiple false columns
-	Lazy->create({ this => 10, that => 20, theother => 30, andanother => 40 });
+	Lazy->insert({ this => 10, that => 20, theother => 30, andanother => 40 });
 };
 ok($@, $@);
 

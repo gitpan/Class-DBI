@@ -1,3 +1,17 @@
+3.0.9 Sep 23 2005
+
+  * Fixed bug with shared meta_info (Will Ross)
+
+  * create() has been renamed to insert() to make it much clearer that
+    it corresponds to an SQL INSERT rather than lots of different ideas
+    as to what create() might mean. create() still (silently) works. It
+    will give 'deprecated' warnings from 3.2.0 and will be removed no
+    earlier than 3.4.0.
+
+    The before/after create triggers have NOT been renamed yet as I'm
+    rethinking some of that. We'll probably end up with more trigger
+    points. Comments and suggestions welcome.
+
 3.0.8 Sep 20 2005
 
   - constraint exceptions now set their 'data' (Dan Collis Puro)

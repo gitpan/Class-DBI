@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.8');
+use version; $VERSION = qv('3.0.9');
 
 use strict;
 use warnings;
@@ -18,6 +18,7 @@ use Class::DBI::ColumnGrouper;
 use Class::DBI::Query;
 use Carp ();
 use List::Util;
+use Storable 'dclone';
 use UNIVERSAL::moniker;
 
 use vars qw($Weaken_Is_Available);
@@ -71,7 +72,7 @@ sub _undefined_primary {
 		rollback         => "discard_changes",      # 0.91
 		commit           => "update",               # 0.91
 		autocommit       => "autoupdate",           # 0.91
-		new              => 'create',               # 0.93
+		new              => 'insert',               # 0.93
 		_commit_vals     => '_update_vals',         # 0.91
 		_commit_line     => '_update_line',         # 0.91
 		make_filter      => 'add_constructor',      # 0.93
@@ -421,12 +422,12 @@ sub find_or_create {
 	my $class    = shift;
 	my $hash     = ref $_[0] eq "HASH" ? shift: {@_};
 	my ($exists) = $class->search($hash);
-	return defined($exists) ? $exists : $class->create($hash);
+	return defined($exists) ? $exists : $class->insert($hash);
 }
 
-sub create {
+sub insert {
 	my $class = shift;
-	return $class->_croak("create needs a hashref") unless ref $_[0] eq 'HASH';
+	return $class->_croak("insert needs a hashref") unless ref $_[0] eq 'HASH';
 	my $info = { %{ +shift } };    # make sure we take a copy
 
 	my $data;
@@ -440,8 +441,10 @@ sub create {
 
 	$class->normalize_column_values($data);
 	$class->validate_column_values($data);
-	return $class->_create($data);
+	return $class->_insert($data);
 }
+
+*create = \&insert;
 
 #----------------------------------------------------------------------
 # Low Level Data Access
@@ -551,7 +554,7 @@ sub _prepopulate_id {
 		if $self->sequence;
 }
 
-sub _create {
+sub _insert {
 	my ($proto, $data) = @_;
 	my $class = ref $proto || $proto;
 
@@ -624,7 +627,7 @@ sub _insert_row {
 		return $self->_db_error(
 			msg    => "Can't insert new $class: $@",
 			err    => $@,
-			method => 'create'
+			method => 'insert'
 		);
 	}
 	return 1;
@@ -695,7 +698,7 @@ sub _as_hash {
 
 sub copy {
 	my $self = shift;
-	return $self->create($self->_data_hash(@_));
+	return $self->insert($self->_data_hash(@_));
 }
 
 #----------------------------------------------------------------------
@@ -717,7 +720,7 @@ sub move {
 	return $old_obj->_croak("Can't move to an unrelated class")
 		unless $class->isa(ref $old_obj)
 		or $old_obj->isa($class);
-	return $class->create($old_obj->_data_hash(@data));
+	return $class->insert($old_obj->_data_hash(@data));
 }
 
 sub delete {
@@ -891,7 +894,7 @@ sub any_changed { keys %{ shift->{__Changed} } }
 #
 # Given a hash ref of column names and proposed new values,
 # edit the values in the hash if required.
-# For create $self is the class name (not an object ref).
+# For insert $self is the class name (not an object ref).
 sub normalize_column_values {
 	my ($self, $column_values) = @_;
 }
@@ -899,7 +902,7 @@ sub normalize_column_values {
 # Given a hash ref of column names and proposed new values
 # validate that the whole set of new values in the hash
 # is valid for the object in relation to its current values
-# For create $self is the class name (not an object ref).
+# For insert $self is the class name (not an object ref).
 sub validate_column_values {
 	my ($self, $column_values) = @_;
 	my @errors;
@@ -1029,7 +1032,7 @@ sub add_relationship_type {
 
 sub _extend_meta {
 	my ($class, $type, $subtype, $val) = @_;
-	my %hash = %{ $class->__meta_info || {} };
+	my %hash = %{ dclone($class->__meta_info || {}) };
 	$hash{$type}->{$subtype} = $val;
 	$class->__meta_info(\%hash);
 }
@@ -1300,7 +1303,7 @@ Class::DBI - Simple Database Abstraction
 
   #-- Meanwhile, in a nearby piece of code! --#
 
-  my $artist = Music::Artist->create({ artistid => 1, name => 'U2' });
+  my $artist = Music::Artist->insert({ artistid => 1, name => 'U2' });
 
   my $cd = $artist->add_to_cds({ 
     cdid   => 1,
@@ -1420,7 +1423,7 @@ your columns, see L</"LAZY POPULATION">
 
 =item I<Done.>
 
-That's it! You now have a class with methods to L<"create">,
+That's it! You now have a class with methods to L<"insert">,
 L<"retrieve">, L<"search"> for, L<"update"> and L<"delete"> objects
 from your table, as well as accessors and mutators for each of the
 columns in that object (row).
@@ -1534,14 +1537,14 @@ then you should declare this using the sequence() method:
   __PACKAGE__->sequence('class_id_seq');
 
 Class::DBI will use the sequence to generate a primary key value when
-objects are created without one.
+objects are inserted without one.
 
 *NOTE* This method does not work for Oracle. However, L<Class::DBI::Oracle>
 (which can be downloaded separately from CPAN) provides a suitable
 replacement sequence() method.
 
 If you are using a database with AUTO_INCREMENT (e.g. MySQL) then you do
-not need this, and any call to create() without a primary key specified
+not need this, and any call to insert() without a primary key specified
 will fill this in automagically.
 
 Sequence and auto-increment mechanisms only apply to tables that have
@@ -1550,21 +1553,22 @@ you need to supply the key values manually.
 
 =head1 CONSTRUCTORS and DESTRUCTORS
 
-The following are methods provided for convenience to create, retrieve
+The following are methods provided for convenience to insert, retrieve
 and delete stored objects.  It's not entirely one-size fits all and you
 might find it necessary to override them.
 
-=head2 create
+=head2 insert
 
-  my $obj = Class->create(\%data);
+  my $obj = Class->insert(\%data);
 
-This is a constructor to create a new object and store it in the database.
+This is a constructor to insert new data into the database and create an
+object representing the newly inserted row.
 
 %data consists of the initial information to place in your object and
 the database.  The keys of %data match up with the columns of your
 objects and the values are the initial settings of those fields.
 
-  my $cd = Music::CD->create({ 
+  my $cd = Music::CD->insert({ 
     cdid   => 1,
     artist => $artist,
     title  => 'October',
@@ -1572,7 +1576,7 @@ objects and the values are the initial settings of those fields.
   });
 
 If the table has a single primary key column and that column value
-is not defined in %data, create() will assume it is to be generated.
+is not defined in %data, insert() will assume it is to be generated.
 If a sequence() has been specified for this Class, it will use that.
 Otherwise, it will assume the primary key can be generated by
 AUTO_INCREMENT and attempt to use that.
@@ -1584,11 +1588,11 @@ functionality of the final object after_creation, particularly if the
 database is going to be providing the primary key value.
 
 For tables with multi-column primary keys you need to supply all
-the key values, either in the arguments to the create() method, or
+the key values, either in the arguments to the insert() method, or
 by setting the values in a C<before_create> trigger.
 
 If the class has declared relationships with foreign classes via
-has_a(), you can pass an object to create() for the value of that key.
+has_a(), you can pass an object to insert() for the value of that key.
 Class::DBI will Do The Right Thing.
 
 After the new record has been inserted into the database the data
@@ -1605,7 +1609,7 @@ has executed.
   my $cd = Music::CD->find_or_create({ artist => 'U2', title => 'Boy' });
 
 This checks if a CD can be found to match the information passed, and
-if not creates it. 
+if not inserts it. 
 
 =head2 delete
 
@@ -1747,7 +1751,7 @@ values, and then invokes the C<select> trigger.
   $new_obj = $obj->copy({ title => 'new_title', rating => 18 });
 
 This creates a copy of the given $obj, removes the primary key,
-sets any supplied column values and calls create() to insert a new
+sets any supplied column values and calls insert() to make a new
 record in the database.
 
 For tables with a single column primary key, copy() can be called
@@ -1757,7 +1761,7 @@ used as the new key.
 
 For tables with a multi-column primary key, copy() must be called with
 parameters which supply new values for all primary key columns, unless
-a C<before_create> trigger will supply them. The create() method will
+a C<before_create> trigger will supply them. The insert() method will
 fail if any primary key columns are not defined.
 
   my $blrunner_dc = $blrunner->copy("Bladerunner: Director's Cut");
@@ -1773,7 +1777,7 @@ fail if any primary key columns are not defined.
   my $new_obj = Sub::Class->move($old_obj, \%changes);
 
 For transferring objects from one class to another. Similar to copy(), an
-instance of Sub::Class is created using the data in $old_obj (Sub::Class
+instance of Sub::Class is inserted using the data in $old_obj (Sub::Class
 is a subclass of $old_obj's subclass). Like copy(), you can supply
 $new_id as the primary key of $new_obj (otherwise the usual sequence or
 autoincrement is used), or a hashref of multiple new values.
@@ -1804,7 +1808,7 @@ You can create any number of triggers for each point, but you cannot
 specify the order in which they will be run. 
 
 All triggers are passed the object they are being fired for, except
-when C<before_set_$column> is fired during L<"create">, in which case
+when C<before_set_$column> is fired during L<"insert">, in which case
 the class is passed in place of the object, which does not yet exist.
 You may change object values if required.
 
@@ -1831,7 +1835,7 @@ that trigger them.
     my ($value, $self, $column_name, $changing) = @_;
     return 1 if $value >= 18;     # We're old enough. 
     return 1 if $changing->{SSN}; # We're also being given an SSN
-    return 0 if !ref($self);      # This is a create, so we can't have an SSN
+    return 0 if !ref($self);      # This is an insert, so we can't have an SSN
     return 1 if $self->ssn;       # We already have one in the database
     return 0;                     # We can't find an SSN anywhere
   }
@@ -1860,11 +1864,11 @@ changed and the value being changed to.
 
 Note 1: Constraints are implemented using before_set_$column triggers.
 This will only prevent you from setting these values through a
-the provided create() or set() methods. It will always be possible to
+the provided insert() or set() methods. It will always be possible to
 bypass this if you try hard enough.
 
 Note 2: When an object is created constraints are currently only
-checked for column names included in the parameters to create().
+checked for column names included in the parameters to insert().
 This is probably a bug and is likely to change in future.
 
 =head2 constrain_column
@@ -1887,7 +1891,7 @@ year example above could be provided by _constrain_by_array().
 
 =head1 DATA NORMALIZATION
 
-Before an object is assigned data from the application (via create or
+Before an object is assigned data from the application (via insert or
 a set accessor) the normalize_column_values() method is called with
 a reference to a hash containing the column names and the new values
 which are to be assigned (after any validation and constraint checking,
@@ -1904,14 +1908,14 @@ being created.
 
 =head1 DATA VALIDATION
 
-Before an object is assigned data from the application (via create or
+Before an object is assigned data from the application (via insert or
 a set accessor) the validate_column_values() method is called with a
 reference to a hash containing the column names and the new values which
 are to be assigned.
 
 The method is called as an instance method when the values of an existing
 object are being changed, and as a class method when a new object is
-being created.
+being inserted.
 
 The default method calls the before_set_$column trigger for each column
 name in the hash. Each trigger is called inside an eval.  Any failures
@@ -2391,7 +2395,7 @@ is the same as the accessor method with "add_to_" prepended.
 
 The add_to_tracks example above is exactly equivalent to:
 
-  my $track6 = Music::Track->create({
+  my $track6 = Music::Track->insert({
     cd       => $cd,
     position => 6,
     title    => 'Tomorrow',
@@ -2902,7 +2906,7 @@ on globally) (courtesy of Dominic Mitchell) is:
   And then you just call:
 
   Music::DBI->do_transaction( sub {
-    my $artist = Music::Artist->create({ name => 'Pink Floyd' });
+    my $artist = Music::Artist->insert({ name => 'Pink Floyd' });
     my $cd = $artist->add_to_cds({ 
       title => 'Dark Side Of The Moon', 
       year => 1974,
@@ -2921,7 +2925,7 @@ only one.
 
 Here's an example to illustrate:
 
-  my $artist1 = Music::Artist->create({ artistid => 7, name => 'Polysics' });
+  my $artist1 = Music::Artist->insert({ artistid => 7, name => 'Polysics' });
   my $artist2 = Music::Artist->retrieve(7);
   my $artist3 = Music::Artist->search( name => 'Polysics' )->first;
 
@@ -3061,7 +3065,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.8
+example, is version 3.0.9
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

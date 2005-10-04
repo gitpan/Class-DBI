@@ -23,14 +23,14 @@ ok(!ref($pj), ' ... which is not an object');
 
 ok(Film->hasa('Director' => 'Director'), "Link Director table");
 ok(
-	Director->create(
+	Director->insert(
 		{
 			Name     => 'Peter Jackson',
 			Birthday => -300000000,
 			IsInsane => 1
 		}
 	),
-	'create Director'
+	'insert Director'
 );
 
 $btaste = Film->retrieve('Bad Taste');
@@ -40,7 +40,7 @@ isa_ok($pj => 'Director');
 is($pj->id, 'Peter Jackson', ' ... and is the correct director');
 
 # Oh no!  Its Peter Jacksons even twin, Skippy!  Born one minute after him.
-my $sj = Director->create(
+my $sj = Director->insert(
 	{
 		Name     => 'Skippy Jackson',
 		Birthday => (-300000000 + 60),
@@ -88,7 +88,7 @@ sub inheriting_hasa {
 
 sub taste_bad {
 	my ($dir, $codir) = @_;
-	my $tastes_bad = YA::Film->create(
+	my $tastes_bad = YA::Film->insert(
 		{
 			Title             => 'Tastes Bad',
 			Director          => $dir,
@@ -110,7 +110,7 @@ sub taste_bad {
 sub fail_with_bad_object {
 	my ($dir, $codir) = @_;
 	eval {
-		YA::Film->create(
+		YA::Film->insert(
 			{
 				Title             => 'Tastes Bad',
 				Director          => $dir,
@@ -151,15 +151,15 @@ __PACKAGE__->db_Main->do( qq{
 package main;
 Foo->has_a("fav" => "Film");
 Bar->has_a("fav" => "Foo");
-my $foo = Foo->create({ id => 6, fav => 'Bad Taste' });
-my $bar = Bar->create({ id => 2, fav => 6 });
+my $foo = Foo->insert({ id => 6, fav => 'Bad Taste' });
+my $bar = Bar->insert({ id => 2, fav => 6 });
 isa_ok($bar->fav, "Foo");
 isa_ok($foo->fav, "Film");
 
 { 
 	my $foo;
 	Foo->add_trigger(after_create => sub { $foo = shift->fav });
-	my $gwh = Foo->create({ id => 93, fav => 'Good Will Hunting' });
+	my $gwh = Foo->insert({ id => 93, fav => 'Good Will Hunting' });
 	isa_ok $foo, "Film", "Object in after_create trigger";
 }
 
