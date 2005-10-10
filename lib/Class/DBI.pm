@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.9');
+use version; $VERSION = qv('3.0.10');
 
 use strict;
 use warnings;
@@ -102,18 +102,11 @@ __PACKAGE__->mk_classdata('__hasa_list');
 __PACKAGE__->mk_classdata('_table');
 __PACKAGE__->mk_classdata('_table_alias');
 __PACKAGE__->mk_classdata('sequence');
-__PACKAGE__->mk_classdata('__grouper');
-__PACKAGE__->mk_classdata('__data_type');
+__PACKAGE__->mk_classdata('__grouper'   => Class::DBI::ColumnGrouper->new());
+__PACKAGE__->mk_classdata('__data_type' => {});
 __PACKAGE__->mk_classdata('__driver');
-__PACKAGE__->__data_type({});
-
-__PACKAGE__->mk_classdata('iterator_class');
-__PACKAGE__->iterator_class('Class::DBI::Iterator');
-__PACKAGE__->__grouper(Class::DBI::ColumnGrouper->new());
-
-__PACKAGE__->mk_classdata('purge_object_index_every');
-__PACKAGE__->purge_object_index_every(1000);
-
+__PACKAGE__->mk_classdata('iterator_class' => 'Class::DBI::Iterator');
+__PACKAGE__->mk_classdata('purge_object_index_every' => 1000);
 __PACKAGE__->add_searcher(search => "Class::DBI::Search::Basic",);
 
 __PACKAGE__->add_relationship_type(
@@ -121,8 +114,7 @@ __PACKAGE__->add_relationship_type(
 	has_many   => "Class::DBI::Relationship::HasMany",
 	might_have => "Class::DBI::Relationship::MightHave",
 );
-__PACKAGE__->mk_classdata('__meta_info');
-__PACKAGE__->__meta_info({});
+__PACKAGE__->mk_classdata('__meta_info' => {});
 
 #----------------------------------------------------------------------
 # SQL we'll need
@@ -1032,6 +1024,8 @@ sub add_relationship_type {
 
 sub _extend_meta {
 	my ($class, $type, $subtype, $val) = @_;
+	local $Storable::Deparse = 1;    # to clone coderefs
+	local $Storable::Eval    = 1;
 	my %hash = %{ dclone($class->__meta_info || {}) };
 	$hash{$type}->{$subtype} = $val;
 	$class->__meta_info(\%hash);
@@ -1242,8 +1236,7 @@ sub _check_classes {    # may automatically call from CHECK block in future
 # Deprecations
 #----------------------------------------------------------------------
 
-__PACKAGE__->mk_classdata('__hasa_rels');
-__PACKAGE__->__hasa_rels({});
+__PACKAGE__->mk_classdata('__hasa_rels' => {});
 
 sub ordered_search {
 	shift->_croak(
@@ -3065,7 +3058,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.9
+example, is version 3.0.10
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

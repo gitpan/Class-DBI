@@ -41,6 +41,7 @@ t/19-set_sql.t
 t/21-iterator.t
 t/22-deflate_order.t
 t/23-cascade.t
+t/24-meta_info.t
 t/97-pod.t
 t/98-failure.t
 t/99-misc.t

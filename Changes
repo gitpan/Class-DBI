@@ -1,3 +1,9 @@
+3.0.10 Oct 7 2005
+
+  * Set Storable::Deparse so that has_a subrefs can be cloned (Will Ross)
+  * Use shorter version of mk_classdata
+  * Include t/24 which was accidentally left out of MANIFEST in 3.0.9
+
 3.0.9 Sep 23 2005
 
   * Fixed bug with shared meta_info (Will Ross)
