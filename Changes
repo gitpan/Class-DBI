@@ -1,3 +1,8 @@
+3.0.11 Oct 23 2005
+
+  * search through a has_many can now take hash_ref
+  * Fix documentation for SQL wildcards (RT#15145)
+
 3.0.10 Oct 7 2005
 
   * Set Storable::Deparse so that has_a subrefs can be cloned (Will Ross)

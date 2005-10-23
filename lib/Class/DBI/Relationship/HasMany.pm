@@ -131,6 +131,7 @@ sub _hm_run_search {
 	my ($class, $accessor) = ($rel->class, $rel->accessor);
 	return sub {
 		my ($self, @search_args) = @_;
+		@search_args = %{ $search_args[0] } if ref $search_args[0] eq "HASH";
 		my $meta = $class->meta_info($rel->name => $accessor);
 		my ($f_class, $f_key, $args) =
 			($meta->foreign_class, $meta->args->{foreign_key}, $meta->args);

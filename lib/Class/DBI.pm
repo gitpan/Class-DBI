@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.10');
+use version; $VERSION = qv('3.0.11');
 
 use strict;
 use warnings;
@@ -1677,7 +1677,7 @@ as 'year DESC, title'.
 
 This is a simple search for all objects where the columns specified are
 like the values specified.  $like_pattern is a pattern given in SQL LIKE
-predicate syntax.  '%' means "any one or more characters", '_' means
+predicate syntax.  '%' means "any zero or more characters", '_' means
 "any single character". 
 
   @cds = Music::CD->search_like(title => 'October%');
@@ -3058,7 +3058,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.10
+example, is version 3.0.11
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

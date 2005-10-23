@@ -80,7 +80,7 @@ is $pvj->Name, "Peter Vere-Jones", "PVJ still ok";
 }
 
 eval {
-	my @actors = $btaste->actors(Name => $pj->Name);
+	my @actors = $btaste->actors({Name => $pj->Name});
 	is @actors, 1, "One actor from restricted (sorted) has_many";
 	is $actors[0]->Name, $pj->Name, "It's PJ";
 };
