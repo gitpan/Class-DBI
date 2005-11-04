@@ -8,7 +8,7 @@ use strict;
 
 __PACKAGE__->set_table();
 __PACKAGE__->columns(All => qw/filmid title/);
-__PACKAGE__->hasa_list(MyStarLink => ['film'] => '_stars');
+__PACKAGE__->has_many(_stars => 'MyStarLink');
 __PACKAGE__->columns(Stringify => 'title');
 
 sub _carp { }

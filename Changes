@@ -1,19 +1,24 @@
+3.0.12 Nov 04 2005
+  - Use Clone instead of dclone for cloning meta info to reduce required
+    perl version (Juan Camacho) and allow for closures (RT#15498)
+  - Remove lots of old deprecations
+
 3.0.11 Oct 23 2005
 
-  * search through a has_many can now take hash_ref
-  * Fix documentation for SQL wildcards (RT#15145)
+  - search through a has_many can now take hash_ref
+  - Fix documentation for SQL wildcards (RT#15145)
 
 3.0.10 Oct 7 2005
 
-  * Set Storable::Deparse so that has_a subrefs can be cloned (Will Ross)
-  * Use shorter version of mk_classdata
-  * Include t/24 which was accidentally left out of MANIFEST in 3.0.9
+  - Set Storable::Deparse so that has_a subrefs can be cloned (Will Ross)
+  - Use shorter version of mk_classdata
+  - Include t/24 which was accidentally left out of MANIFEST in 3.0.9
 
 3.0.9 Sep 23 2005
 
-  * Fixed bug with shared meta_info (Will Ross)
+  - Fixed bug with shared meta_info (Will Ross)
 
-  * create() has been renamed to insert() to make it much clearer that
+  - create() has been renamed to insert() to make it much clearer that
     it corresponds to an SQL INSERT rather than lots of different ideas
     as to what create() might mean. create() still (silently) works. It
     will give 'deprecated' warnings from 3.2.0 and will be removed no

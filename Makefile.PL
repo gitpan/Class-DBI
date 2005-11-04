@@ -70,7 +70,7 @@ WriteMakefile(
 		'Ima::DBI'                 => '0.33',
 		'List::Util'               => '1.00',
 		'Scalar::Util'             => '1.08',
-		'Storable'                 => '2.05', # for dclone with CODE
+		'Clone'                    => 0,
 		'Test::More'               => '0.47',
 		'UNIVERSAL::moniker'       => '0.06',
 		'version'                  => 0,

@@ -21,7 +21,7 @@ ok(my $btaste = Film->retrieve('Bad Taste'), "We have Bad Taste");
 ok(my $pj = $btaste->Director, "Bad taste hasa() director");
 ok(!ref($pj), ' ... which is not an object');
 
-ok(Film->hasa('Director' => 'Director'), "Link Director table");
+ok(Film->has_a('Director' => 'Director'), "Link Director table");
 ok(
 	Director->insert(
 		{
@@ -50,7 +50,7 @@ my $sj = Director->insert(
 
 is($sj->id, 'Skippy Jackson', 'We have a new director');
 
-Film->hasa('Director' => 'CoDirector');
+Film->has_a(CoDirector => 'Director');
 
 $btaste->CoDirector($sj);
 $btaste->update;

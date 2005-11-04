@@ -1,5 +1,5 @@
 use strict;
-use Test::More tests => 28;
+use Test::More tests => 26;
 
 #-----------------------------------------------------------------------
 # Make sure that we can set up columns properly
@@ -65,7 +65,6 @@ is_deeply [ sort CD->columns('Essential') ] => [qw/artist/],
 {
 	local $SIG{__WARN__} = sub { ok 1, "Error thrown" };
 	ok(!State->columns('Nonsense'), "No Nonsense group");
-	ok(State->is_column('capital'), 'is_column deprecated');
 }
 ok(State->find_column('Rain'),        'find_column Rain');
 ok(State->find_column('rain'),        'find_column rain');

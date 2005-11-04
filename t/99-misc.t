@@ -8,7 +8,7 @@ use File::Temp qw/tempdir/;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 27);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 22);
 }
 
 use File::Temp qw/tempfile/;
@@ -20,8 +20,6 @@ END { unlink $DB if -e $DB }
 package Holiday;
 
 use base 'Class::DBI';
-
-sub wibble { shift->croak("Croak dies") }
 
 {
 	my $warning;
@@ -49,18 +47,6 @@ sub wibble { shift->croak("Croak dies") }
 	};
 	Holiday->add_trigger('create' => sub { 1 });
 	Holiday->add_trigger('delete' => sub { 1 });
-}
-
-{
-	local $SIG{__WARN__} = sub {
-		::like $_[0], qr/deprecated/, "croak() deprecated";
-	};
-
-	eval { Holiday->croak("Croak dies") };
-	::like $@, qr/Croak dies/, "Croak dies";
-
-	eval { Holiday->wibble };
-	::like $@, qr/Croak dies/, "Croak dies";
 }
 
 {
@@ -129,9 +115,6 @@ like $@, qr/class method/, "Can't call update as class method";
 is(Holiday->table, 'holiday', "Default table name");
 
 Holiday->_flesh('Blanket');
-
-eval { Holiday->ordered_search() };
-like $@, qr/order_by/, "ordered_search no longer works";
 
 eval { Holiday->insert({ yonkey => 84 }) };
 like $@, qr/not a column/, "Can't create with nonsense column";

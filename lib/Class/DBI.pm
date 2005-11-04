@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.11');
+use version; $VERSION = qv('3.0.12');
 
 use strict;
 use warnings;
@@ -18,7 +18,7 @@ use Class::DBI::ColumnGrouper;
 use Class::DBI::Query;
 use Carp ();
 use List::Util;
-use Storable 'dclone';
+use Clone ();
 use UNIVERSAL::moniker;
 
 use vars qw($Weaken_Is_Available);
@@ -52,32 +52,16 @@ sub _undefined_primary {
 	return grep !defined, $self->_attrs($self->primary_columns);
 }
 
+#----------------------------------------------------------------------
+# Deprecations
+#----------------------------------------------------------------------
+
+__PACKAGE__->mk_classdata('__hasa_rels' => {});
+
 {
 	my %deprecated = (
-		croak            => "_croak",               # 0.89
-		carp             => "_carp",                # 0.89
-		min              => "minimum_value_of",     # 0.89
-		max              => "maximum_value_of",     # 0.89
-		normalize_one    => "_normalize_one",       # 0.89
-		_primary         => "primary_column",       # 0.90
-		primary          => "primary_column",       # 0.89
-		primary_key      => "primary_column",       # 0.90
-		essential        => "_essential",           # 0.89
-		column_type      => "has_a",                # 0.90
-		associated_class => "has_a",                # 0.90
-		is_column        => "find_column",          # 0.90
-		has_column       => "find_column",          # 0.94
-		add_hook         => "add_trigger",          # 0.90
-		run_sql          => "retrieve_from_sql",    # 0.90
-		rollback         => "discard_changes",      # 0.91
-		commit           => "update",               # 0.91
-		autocommit       => "autoupdate",           # 0.91
-		new              => 'insert',               # 0.93
-		_commit_vals     => '_update_vals',         # 0.91
-		_commit_line     => '_update_line',         # 0.91
-		make_filter      => 'add_constructor',      # 0.93
-		accessor_name    => 'accessor_name_for',    # 3.0.7
-		mutator_name     => 'mutator_name_for',     # 3.0.7
+		accessor_name => 'accessor_name_for',    # 3.0.7
+		mutator_name  => 'mutator_name_for',     # 3.0.7
 	);
 
 	no strict 'refs';
@@ -90,9 +74,6 @@ sub _undefined_primary {
 		};
 	}
 }
-
-sub normalize      { shift->_carp("normalize is deprecated") }         # 0.94
-sub normalize_hash { shift->_carp("normalize_hash is deprecated") }    # 0.94
 
 #----------------------------------------------------------------------
 # Our Class Data
@@ -1024,9 +1005,7 @@ sub add_relationship_type {
 
 sub _extend_meta {
 	my ($class, $type, $subtype, $val) = @_;
-	local $Storable::Deparse = 1;    # to clone coderefs
-	local $Storable::Eval    = 1;
-	my %hash = %{ dclone($class->__meta_info || {}) };
+	my %hash = %{ Clone::clone($class->__meta_info || {}) };
 	$hash{$type}->{$subtype} = $val;
 	$class->__meta_info(\%hash);
 }
@@ -1230,30 +1209,6 @@ sub _check_classes {    # may automatically call from CHECK block in future
 		$by_class->_croak(
 			"Class $load_class used by $by_class has not been loaded");
 	}
-}
-
-#----------------------------------------------------------------------
-# Deprecations
-#----------------------------------------------------------------------
-
-__PACKAGE__->mk_classdata('__hasa_rels' => {});
-
-sub ordered_search {
-	shift->_croak(
-		"Ordered search no longer exists. Pass order_by to search instead.");
-}
-
-sub hasa {
-	my ($class, $f_class, $f_col) = @_;
-	$class->_carp(
-		"hasa() is deprecated in favour of has_a(). Using it instead.");
-	$class->has_a($f_col => $f_class);
-}
-
-sub hasa_list {
-	my $class = shift;
-	$class->_carp("hasa_list() is deprecated in favour of has_many()");
-	$class->has_many(@_[ 2, 0, 1 ], { nohasa => 1 });
 }
 
 1;
@@ -3058,7 +3013,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.11
+example, is version 3.0.12
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases
