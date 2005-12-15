@@ -44,6 +44,10 @@ sub _object_accessor {
 		my $meta = $class->meta_info($rel->name => $method);
 		my ($f_class, @extra) =
 			($meta->foreign_class, @{ $meta->args->{import} });
+		return
+			if defined($self->{"_${method}_object"})
+			&& $self->{"_${method}_object"}
+			->isa('Class::DBI::Object::Has::Been::Deleted');
 		$self->{"_${method}_object"} ||= $f_class->retrieve($self->id);
 	};
 }
@@ -57,7 +61,8 @@ sub _imported_accessor {
 		my ($f_class, @extra) =
 			($meta->foreign_class, @{ $meta->args->{import} });
 		my $for_obj = $self->$method() || do {
-			my $val = shift or return;    # just fetching
+			return unless @_;    # just fetching
+			my $val = shift;
 			$f_class->insert(
 				{ $f_class->primary_column => $self->id, $name => $val });
 			$self->$method();

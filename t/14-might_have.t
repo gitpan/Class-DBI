@@ -3,7 +3,7 @@ use Test::More;
 
 BEGIN {
 	eval "use DBD::SQLite";
-	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 18);
+	plan $@ ? (skip_all => 'needs DBD::SQLite for testing') : (tests => 27);
 }
 
 use lib 't/testlib';
@@ -60,5 +60,38 @@ Film->create_test_film;
 	}
 		
 }
+
+Film->create_test_film;
+{
+    ok my $bt = Film->retrieve('Bad Taste'), "Get Film";
+    $bt->blurb("Wibble bar");
+    $bt->update;
+    is $bt->blurb, "Wibble bar", "We can write the info";
+
+    # Bug #15635: Operation `bool': no method found
+    $bt->info->delete;
+    my $blurb = eval { $bt->blurb };
+    is $@, '', "Can delete the blurb";
+
+    is $blurb, undef, "Blurb is now undef";
+
+    eval { $bt->delete };
+    is $@, '', "Can delete the parent object";
+}
+
+Film->create_test_film;
+{
+	ok my $bt = Film->retrieve('Bad Taste'), "Get Film (recreated)";
+	is $bt->blurb, undef, "Bad taste has no blurb";
+	$bt->blurb(0);
+	$bt->update;
+	is $bt->blurb, 0, "We can write false values";
+
+	$bt->blurb(undef);
+	$bt->update;
+	is $bt->blurb, undef, "And explicit NULLs";
+	$bt->delete;
+}
+
 
 	

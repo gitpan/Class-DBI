@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.12');
+use version; $VERSION = qv('3.0.13');
 
 use strict;
 use warnings;
@@ -572,10 +572,15 @@ sub _auto_increment_value {
 	my $self = shift;
 	my $dbh  = $self->db_Main;
 
-	# the DBI will provide a standard attribute soon, meanwhile...
-	my $id = $dbh->{mysql_insertid}    # mysql
-		|| eval { $dbh->func('last_insert_rowid') };    # SQLite
-	$self->_croak("Can't get last insert id") unless defined $id;
+	# Try to do this in a standard method. Fall back to MySQL/SQLite
+	# specific versions. TODO remove these when last_insert_id is more
+	# widespread.
+	# Note: I don't believe the last_insert_id can be zero. We need to
+	# switch to defined() checks if it can.
+	my $id = $dbh->last_insert_id(undef, undef, $self->table, undef)    # std
+		|| $dbh->{mysql_insertid}                                         # mysql
+		|| eval { $dbh->func('last_insert_rowid') }
+		or $self->_croak("Can't get last insert id");
 	return $id;
 }
 
@@ -3013,7 +3018,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.12
+example, is version 3.0.13
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

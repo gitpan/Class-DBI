@@ -1692,7 +1692,7 @@ THANKS TO
 
 RELEASE PHILOSOPHY
     Class::DBI now uses a three-level versioning system. This release, for
-    example, is version 3.0.11
+    example, is version 3.0.13
 
     The general approach to releases will be that users who like a degree of
     stability can hold off on upgrades until the major sub-version increases

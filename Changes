@@ -1,3 +1,8 @@
+3.0.13 Dec 15 2005
+  - Use DBI's last_insert_id() where available (David Steinbrunner)
+  - Cope better with deleting through a might_have (Rob Brown)
+  - Allow setting a false value or NULL in a might_have (Brad Bowman)
+
 3.0.12 Nov 04 2005
   - Use Clone instead of dclone for cloning meta info to reduce required
     perl version (Juan Camacho) and allow for closures (RT#15498)

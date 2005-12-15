@@ -19,7 +19,9 @@ sub triggers {
 	$self->class->_require_class($self->foreign_class);
 	my $column = $self->accessor;
 	return (
-		select              => $self->_inflator,
+		select => $self->_inflator,
+
+		# after_create        => $self->_inflator, # see t/6
 		"after_set_$column" => $self->_inflator,
 		deflate_for_create  => $self->_deflator(1),
 		deflate_for_update  => $self->_deflator,
