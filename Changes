@@ -1,3 +1,7 @@
+
+3.0.14 Jan 03 2006
+  - Fix breakage with mutator_name (Ask Bjørn Hansen)
+
 3.0.13 Dec 15 2005
   - Use DBI's last_insert_id() where available (David Steinbrunner)
   - Cope better with deleting through a might_have (Rob Brown)

@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.13');
+use version; $VERSION = qv('3.0.14');
 
 use strict;
 use warnings;
@@ -329,11 +329,30 @@ sub _add_data_type {
 sub _mk_column_accessors {
 	my $class = shift;
 	foreach my $col (@_) {
-		my %method = (
-			_ro_ => $col->accessor($class->accessor_name_for($col)),
-			_wo_ => $col->mutator($class->mutator_name_for($col)),
-		);
-		%method = ('_' => $method{_ro_}) if $method{_ro_} eq $method{_wo_};
+
+		my $default_accessor = $col->accessor;
+
+		my $acc = $class->accessor_name_for($col);
+		my $mut = $class->mutator_name_for($col);
+
+		my %method = ();
+
+		if (
+			($acc    eq $mut)                # if they are the same
+			or ($mut eq $default_accessor)
+			) {                              # or only the accessor was customized
+			%method = ('_' => $acc);         # make the accessor the mutator too
+			$col->accessor($acc);
+			$col->mutator($acc);
+			} else {
+			%method = (
+				_ro_ => $acc,
+				_wo_ => $mut,
+			);
+			$col->accessor($acc);
+			$col->mutator($mut);
+		}
+
 		foreach my $type (keys %method) {
 			my $name     = $method{$type};
 			my $acc_type = "make${type}accessor";
@@ -3018,7 +3037,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.13
+example, is version 3.0.14
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases
