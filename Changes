@@ -1,4 +1,7 @@
 
+3.0.15 Aug 19 2006
+  - Fix ignorage with mutator_name and accessor_name (Ask Bjørn Hansen)
+
 3.0.14 Jan 03 2006
   - Fix breakage with mutator_name (Ask Bjørn Hansen)
 

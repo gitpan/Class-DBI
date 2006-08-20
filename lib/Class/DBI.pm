@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.14');
+use version; $VERSION = qv('3.0.15');
 
 use strict;
 use warnings;
@@ -60,9 +60,9 @@ __PACKAGE__->mk_classdata('__hasa_rels' => {});
 
 {
 	my %deprecated = (
-		accessor_name => 'accessor_name_for',    # 3.0.7
-		mutator_name  => 'mutator_name_for',     # 3.0.7
-	);
+   # accessor_name => 'accessor_name_for', # 3.0.7
+   # mutator_name  => 'accessor_name_for', # 3.0.7
+  );
 
 	no strict 'refs';
 	while (my ($old, $new) = each %deprecated) {
@@ -375,11 +375,19 @@ sub _make_method {
 
 sub accessor_name_for {
 	my ($class, $column) = @_;
+  if ($class->can('accessor_name')) { 
+		warn "Use of 'accessor_name' is deprecated. Use 'accessor_name_for' instead\n";
+		return $class->accessor_name($column) 
+	}
 	return $column->accessor;
 }
 
 sub mutator_name_for {
 	my ($class, $column) = @_;
+  if ($class->can('mutator_name')) { 
+		warn "Use of 'mutator_name' is deprecated. Use 'mutator_name_for' instead\n";
+		return $class->mutator_name($column) 
+	}
 	return $column->mutator;
 }
 
@@ -3037,7 +3045,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.14
+example, is version 3.0.15
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases
