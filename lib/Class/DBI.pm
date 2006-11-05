@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.15');
+use version; $VERSION = qv('3.0.16');
 
 use strict;
 use warnings;

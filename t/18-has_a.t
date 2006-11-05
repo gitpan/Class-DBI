@@ -35,6 +35,7 @@ ok(
 	isa_ok $pj => 'Director';
 	{
 		no warnings 'redefine';
+		no warnings 'once';
 		local *Ima::DBI::st::execute =
 			sub { ::fail("Shouldn't need to query db"); };
 		is $pj->id, 'Peter Jackson', 'ID already stored';

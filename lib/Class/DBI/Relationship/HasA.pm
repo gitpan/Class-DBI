@@ -9,7 +9,7 @@ sub remap_arguments {
 	my ($proto, $class, $want_col, $a_class, %meths) = @_;
 	$class->_invalid_object_method("has_a") if ref $class;
 	my $column = $class->find_column($want_col)
-		or return $class->_croak("Column $want_col does not exist");
+		or return $class->_croak("Column $want_col does not exist in $class");
 	$class->_croak("$class $column needs an associated class") unless $a_class;
 	return ($class, $column, $a_class, \%meths);
 }

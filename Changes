@@ -1,4 +1,7 @@
 
+3.0.16 Nov 05, 2006
+  - Better error reporting from has_a setup failure
+
 3.0.15 Aug 19 2006
   - Fix ignorage with mutator_name and accessor_name (Ask Bjørn Hansen)
 
