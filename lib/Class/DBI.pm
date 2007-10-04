@@ -7,7 +7,7 @@ use base qw(Class::Accessor Class::Data::Inheritable Ima::DBI);
 
 package Class::DBI;
 
-use version; $VERSION = qv('3.0.16');
+use version; $VERSION = qv('3.0.17');
 
 use strict;
 use warnings;
@@ -3045,7 +3045,7 @@ and all the others who've helped, but that I've forgetten to mention.
 =head1 RELEASE PHILOSOPHY
 
 Class::DBI now uses a three-level versioning system. This release, for
-example, is version 3.0.15
+example, is version 3.0.17
 
 The general approach to releases will be that users who like a degree of
 stability can hold off on upgrades until the major sub-version increases

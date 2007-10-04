@@ -1,4 +1,8 @@
 
+3.0.17 Oct 4, 2007
+  - Fix t/11 to cope with Class::Trigger no longer supporting multiple
+    triggers in one shot
+
 3.0.16 Nov 05, 2006
   - Better error reporting from has_a setup failure
 
